@@ -49,7 +49,8 @@ MYSQL: { API_URL: 'http://localhost:3000/api' }
    `status: "Aktif"`, dan `email`. Gunakan UID dari Authentication sebagai ID dokumen.
    Setelah login, admin dapat mengelola data dari aplikasi.
 
-Login memakai username yang diubah jadi email `username@smartabs.app` (`FIREBASE_LOGIN_DOMAIN`).
+Login memakai username yang diubah menjadi email dengan domain `FIREBASE_LOGIN_DOMAIN`
+di `js/config.js` (misalnya username `admin` menjadi `admin@gmail.com`).
 
 ### Publikasi di GitHub Pages
 

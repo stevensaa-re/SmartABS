@@ -14,7 +14,7 @@ const admin = require('firebase-admin');
 const path = require('path');
 const seed = require('../seed-data');
 
-const LOGIN_DOMAIN = process.env.LOGIN_DOMAIN || 'smartabs.app';   // harus sama dengan APP_CONFIG.FIREBASE_LOGIN_DOMAIN
+const LOGIN_DOMAIN = process.env.LOGIN_DOMAIN || 'gmail.com';   // harus sama dengan APP_CONFIG.FIREBASE_LOGIN_DOMAIN
 
 admin.initializeApp({
   credential: admin.credential.cert(require(path.join(__dirname, 'serviceAccountKey.json')))

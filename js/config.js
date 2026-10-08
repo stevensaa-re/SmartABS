@@ -34,7 +34,7 @@ const APP_CONFIG = {
 
   /* Firebase Auth butuh email. Username diubah menjadi
      "<username>@<domain ini>" saat login. */
-  FIREBASE_LOGIN_DOMAIN: 'smartabs.app',
+  FIREBASE_LOGIN_DOMAIN: 'gmail.com',
 
   /* ---------- Sesi ---------- */
   SESSION_HOURS: 12,      // masa berlaku sesi biasa
