@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Siswa — SMARTABS</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/dashboard.css">
+  <link rel="stylesheet" href="../css/table.css">
+  <link rel="stylesheet" href="../css/responsive.css">
+  <script src="../js/config.js"></script>
+  <script src="../js/utils.js"></script>
+  <script src="../js/auth.js"></script>
+</head>
+<body data-role="siswa" data-page="dashboard">
+<script src="../js/guard.js"></script>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <div class="main">
+    <header class="navbar" id="navbar"></header>
+
+    <main class="content">
+      <div class="page-head">
+        <div>
+          <h1>Halo, <span id="studentGreeting">Siswa</span> 👋</h1>
+          <p>Berikut ringkasan kehadiran Anda di SMARTABS.</p>
+        </div>
+        <a href="attendance.html" class="btn btn-primary">
+          <i class="fa-solid fa-fingerprint"></i> Absen Sekarang
+        </a>
+      </div>
+
+      <section class="card profile-card" id="studentProfile"></section>
+
+      <section class="stats-grid" id="statsGrid"></section>
+
+      <section class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <h3>Komposisi Kehadiran</h3>
+            <span class="text-muted">Total keseluruhan</span>
+          </div>
+          <div class="card-body">
+            <div class="chart-box"><canvas id="studentStatusChart"></canvas></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3>Kehadiran 7 Hari Terakhir</h3>
+          </div>
+          <div class="card-body">
+            <div class="chart-box"><canvas id="studentTrendChart"></canvas></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-header">
+          <h3>Riwayat Terbaru</h3>
+          <a href="history.html" class="btn btn-ghost btn-sm">Lihat semua</a>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Tanggal</th>
+                <th>Jam</th>
+                <th>Status</th>
+                <th>Keterangan</th>
+              </tr>
+            </thead>
+            <tbody id="recentHistory"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="../js/mock-data.js"></script>
+<script src="../js/adapters/local.js"></script>
+<script src="../js/adapters/mysql.js"></script>
+<script src="../js/adapters/firebase.js"></script>
+<script src="../js/api.js"></script>
+<script src="../js/notifications.js"></script>
+<script src="../js/app.js"></script>
+<script src="../js/dashboard.js"></script>
+</body>
+</html>

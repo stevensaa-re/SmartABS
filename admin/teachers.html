@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Data Guru — SMARTABS</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/table.css">
+  <link rel="stylesheet" href="../css/responsive.css">
+  <script src="../js/config.js"></script>
+  <script src="../js/utils.js"></script>
+  <script src="../js/auth.js"></script>
+</head>
+<body data-role="admin" data-page="teachers">
+<script src="../js/guard.js"></script>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <div class="main">
+    <header class="navbar" id="navbar"></header>
+
+    <main class="content">
+      <div class="page-head">
+        <div>
+          <h1>Data Guru</h1>
+          <p>Hubungkan akun guru dengan mata pelajaran dan kelas yang diampu.</p>
+        </div>
+        <button class="btn btn-primary" id="btnAddTeacher">
+          <i class="fa-solid fa-plus"></i> Tambah Guru
+        </button>
+      </div>
+
+      <section class="card">
+        <div class="table-toolbar">
+          <div class="search-box">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="searchTeacher" class="form-control" placeholder="Cari nama atau mata pelajaran...">
+          </div>
+          <div class="filter-group">
+            <select id="filterTeacherStatus" class="form-control">
+              <option value="">Semua Status</option>
+              <option value="Aktif">Aktif</option>
+              <option value="Nonaktif">Nonaktif</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Nama</th>
+                <th>Username</th>
+                <th>Mata Pelajaran</th>
+                <th>Kelas Diampu</th>
+                <th>Status</th>
+                <th class="text-right">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="teacherTableBody"></tbody>
+          </table>
+        </div>
+        <div class="table-footer">
+          <span id="teacherCount" class="text-muted">0 guru</span>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<!-- Modal Form Guru -->
+<div class="modal" id="teacherModal">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <h3 id="teacherModalTitle">Tambah Guru</h3>
+      <button class="icon-btn" id="closeTeacherModal" aria-label="Tutup">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <form id="teacherForm" novalidate>
+      <div class="modal-body">
+        <input type="hidden" id="teacherId">
+
+        <div class="form-group">
+          <label for="teacherUsername">Akun Guru <span class="req">*</span></label>
+          <select id="teacherUsername" class="form-control" required></select>
+          <small class="form-error" id="errTeacherUsername"></small>
+          <small class="text-muted">Hanya akun dengan role Guru yang belum terdaftar yang tampil di sini.</small>
+        </div>
+
+        <div class="form-group">
+          <label for="teacherName">Nama Lengkap <span class="req">*</span></label>
+          <input type="text" id="teacherName" class="form-control" placeholder="Contoh: Budi Santoso, S.Kom" required>
+          <small class="form-error" id="errTeacherName"></small>
+        </div>
+
+        <div class="form-group">
+          <label for="teacherSubject">Mata Pelajaran</label>
+          <input type="text" id="teacherSubject" class="form-control" placeholder="Contoh: Pemrograman Web">
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="teacherClass">Kelas Diampu</label>
+            <select id="teacherClass" class="form-control"></select>
+          </div>
+          <div class="form-group">
+            <label for="teacherStatus">Status</label>
+            <select id="teacherStatus" class="form-control">
+              <option value="Aktif">Aktif</option>
+              <option value="Nonaktif">Nonaktif</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" id="cancelTeacherModal">Batal</button>
+        <button type="submit" class="btn btn-primary" id="saveTeacherBtn">Simpan</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="../js/mock-data.js"></script>
+<script src="../js/adapters/local.js"></script>
+<script src="../js/adapters/mysql.js"></script>
+<script src="../js/adapters/firebase.js"></script>
+<script src="../js/api.js"></script>
+<script src="../js/notifications.js"></script>
+<script src="../js/app.js"></script>
+<script src="../js/teachers.js"></script>
+</body>
+</html>

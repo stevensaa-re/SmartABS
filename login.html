@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Masuk — SMARTABS</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/login.css">
+  <link rel="stylesheet" href="css/responsive.css">
+</head>
+<body class="page-login">
+
+  <div class="login-wrapper">
+
+    <!-- Panel branding -->
+    <section class="login-brand">
+      <div class="brand-top">
+        <div class="brand-mark"><i class="fa-solid fa-fingerprint"></i></div>
+        <div>
+          <h2>SMARTABS</h2>
+          <span>Smart Attendance System</span>
+        </div>
+      </div>
+
+      <div class="brand-content">
+        <h1>Sistem Absensi Sekolah Berbasis Web &amp; IoT</h1>
+        <p>Pencatatan kehadiran siswa yang cepat, akurat, dan terpusat dalam satu dashboard.</p>
+        <ul class="brand-list">
+          <li><i class="fa-solid fa-circle-check"></i> Absensi real-time</li>
+          <li><i class="fa-solid fa-circle-check"></i> Rekap otomatis per kelas</li>
+          <li><i class="fa-solid fa-circle-check"></i> Hak akses Admin, Guru, dan Siswa</li>
+        </ul>
+      </div>
+
+      <p class="brand-footer">&copy; 2026 SMARTABS — Project PPLG</p>
+    </section>
+
+    <!-- Panel form -->
+    <section class="login-form-panel">
+      <form class="login-card" id="loginForm" novalidate>
+        <header class="login-head">
+          <h2>Masuk ke Akun Anda</h2>
+          <p>Gunakan username dan password yang telah diberikan.</p>
+        </header>
+
+        <div class="alert alert-danger hidden" id="loginError">
+          <i class="fa-solid fa-circle-exclamation"></i>
+          <span id="loginErrorText">Username atau password salah.</span>
+        </div>
+
+        <div class="form-group">
+          <label for="username">Username</label>
+          <div class="input-icon">
+            <i class="fa-solid fa-user"></i>
+            <input type="text" id="username" name="username" class="form-control"
+                   placeholder="Masukkan username" autocomplete="username" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="password">Password</label>
+          <div class="input-icon">
+            <i class="fa-solid fa-lock"></i>
+            <input type="password" id="password" name="password" class="form-control"
+                   placeholder="Masukkan password" autocomplete="current-password" required>
+            <button type="button" class="toggle-password" id="togglePassword"
+                    aria-label="Tampilkan password">
+              <i class="fa-solid fa-eye"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="login-options">
+          <label class="checkbox">
+            <input type="checkbox" id="rememberMe">
+            <span>Ingat saya</span>
+          </label>
+          <span class="text-muted">Lupa password? Hubungi admin</span>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block" id="loginButton">
+          <span class="btn-text">Masuk</span>
+          <span class="spinner spinner-sm hidden"></span>
+        </button>
+
+        <div class="demo-accounts">
+          <p>Akun demo — klik untuk mengisi otomatis:</p>
+          <div class="demo-grid">
+            <button type="button" class="demo-account" data-username="admin" data-password="admin123">
+              <i class="fa-solid fa-user-shield"></i>
+              <strong>Admin</strong><span>admin / admin123</span>
+            </button>
+            <button type="button" class="demo-account" data-username="guru" data-password="guru123">
+              <i class="fa-solid fa-chalkboard-user"></i>
+              <strong>Guru</strong><span>guru / guru123</span>
+            </button>
+            <button type="button" class="demo-account" data-username="siswa" data-password="siswa123">
+              <i class="fa-solid fa-user-graduate"></i>
+              <strong>Siswa</strong><span>siswa / siswa123</span>
+            </button>
+          </div>
+        </div>
+      </form>
+    </section>
+
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/mock-data.js"></script>
+  <script src="js/adapters/local.js"></script>
+  <script src="js/adapters/mysql.js"></script>
+  <script src="js/adapters/firebase.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/notifications.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/login.js"></script>
+</body>
+</html>

@@ -1,0 +1,105 @@
+rules_version = '2';
+
+// =========================================================
+// SMARTABS — Firestore Security Rules
+// Inilah yang menegakkan hak akses di mode Firebase. Kode di browser
+// bisa diubah siapa saja, jadi aturan di sini adalah pengaman sebenarnya.
+//
+// Deploy:  firebase deploy --only firestore:rules
+// =========================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- Helper ----------
+    function signedIn() { return request.auth != null; }
+
+    function me() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function active() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && me().status == 'Aktif';
+    }
+
+    function isAdmin()      { return active() && me().role == 'admin'; }
+    function isGuru()       { return active() && me().role == 'guru'; }
+    function isSiswa()      { return active() && me().role == 'siswa'; }
+    function isStaff()      { return isAdmin() || isGuru(); }
+
+    // NIS milik siswa yang login (diisi admin saat menghubungkan akun ke siswa)
+    function myNis()        { return me().get('nis', ''); }
+
+    // ---------- users ----------
+    // Pengguna boleh membaca profilnya sendiri; admin mengelola semuanya.
+    match /users/{uid} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow create, delete: if isAdmin();
+      // Admin boleh mengubah profil lain; pengguna tidak boleh mengubah role/status sendiri.
+      allow update: if isAdmin();
+    }
+
+    // ---------- data master ----------
+    match /classes/{id} {
+      allow read: if active();
+      allow write: if isAdmin();
+    }
+
+    match /schedules/{id} {
+      allow read: if active();
+      allow write: if isAdmin();
+    }
+
+    match /announcements/{id} {
+      allow read: if isAdmin() || (active() && resource.data.status == 'Publish');
+      allow write: if isAdmin();
+    }
+
+    match /teachers/{id} {
+      allow read: if isAdmin() || (isGuru() && resource.data.username == me().username);
+      allow write: if isAdmin();
+    }
+
+    match /students/{nis} {
+      allow read: if isStaff() || (isSiswa() && nis == myNis());
+      allow write: if isAdmin();
+    }
+
+    // ---------- absensi ----------
+    // Dokumen berid "{tanggal}_{nis}" sehingga satu siswa = satu baris per hari.
+    match /attendance/{id} {
+      allow read: if isStaff() || (isSiswa() && resource.data.studentId == myNis());
+
+      // Staf boleh menulis apa saja.
+      allow create, update, delete: if isStaff();
+
+      // Siswa: hanya membuat absensi "Hadir" untuk dirinya sendiri, SEKALI (create saja,
+      // tanpa update/delete), dengan id dokumen "{tanggal}_{nis}".
+      // CATATAN: Firestore Rules memakai UTC, sehingga tanggal "hari ini" menurut WIB
+      // tidak bisa dicocokkan secara andal di sini. Batas tanggal & jam server yang ketat
+      // hanya tersedia pada mode MySQL (atau tambahkan Cloud Function untuk absen mandiri).
+      allow create: if isSiswa()
+        && request.resource.data.studentId == myNis()
+        && request.resource.data.status == 'Hadir'
+        && id == request.resource.data.date + '_' + myNis();
+    }
+
+    // ---------- izin / sakit ----------
+    match /permissions/{id} {
+      allow read: if isStaff() || (isSiswa() && resource.data.studentId == myNis());
+      allow update, delete: if isStaff();
+
+      allow create: if isSiswa()
+        && request.resource.data.studentId == myNis()
+        && request.resource.data.status == 'Menunggu'
+        && request.resource.data.type in ['Izin', 'Sakit'];
+    }
+
+    // Selain yang tertulis di atas: tolak.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

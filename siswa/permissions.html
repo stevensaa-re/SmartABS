@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pengajuan Izin — SMARTABS</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/table.css">
+  <link rel="stylesheet" href="../css/responsive.css">
+  <script src="../js/config.js"></script>
+  <script src="../js/utils.js"></script>
+  <script src="../js/auth.js"></script>
+</head>
+<body data-role="siswa" data-page="permissions">
+<script src="../js/guard.js"></script>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <div class="main">
+    <header class="navbar" id="navbar"></header>
+
+    <main class="content">
+      <div class="page-head">
+        <div>
+          <h1>Pengajuan Izin / Sakit</h1>
+          <p>Ajukan ketidakhadiran dan pantau status verifikasi dari guru.</p>
+        </div>
+        <button class="btn btn-primary" id="btnAddPermission">
+          <i class="fa-solid fa-plus"></i> Ajukan Izin
+        </button>
+      </div>
+
+      <section class="card">
+        <div class="table-toolbar">
+          <div class="filter-group">
+            <select id="filterMyPermissionStatus" class="form-control">
+              <option value="">Semua Status</option>
+              <option value="Menunggu">Menunggu</option>
+              <option value="Disetujui">Disetujui</option>
+              <option value="Ditolak">Ditolak</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Tanggal</th>
+                <th>Jenis</th>
+                <th>Keterangan</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="myPermissionTableBody"></tbody>
+          </table>
+        </div>
+        <div class="table-footer">
+          <span id="myPermissionCount" class="text-muted">0 pengajuan</span>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<!-- Modal Form Pengajuan -->
+<div class="modal" id="permissionModal">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <h3>Ajukan Izin / Sakit</h3>
+      <button class="icon-btn" id="closePermissionModal" aria-label="Tutup">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <form id="permissionForm" novalidate>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="permissionDate">Tanggal <span class="req">*</span></label>
+            <input type="date" id="permissionDate" class="form-control" required>
+            <small class="form-error" id="errPermissionDate"></small>
+          </div>
+          <div class="form-group">
+            <label for="permissionType">Jenis <span class="req">*</span></label>
+            <select id="permissionType" class="form-control">
+              <option value="Izin">Izin</option>
+              <option value="Sakit">Sakit</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="permissionNote">Keterangan <span class="req">*</span></label>
+          <textarea id="permissionNote" class="form-control" placeholder="Contoh: Demam, ada surat dokter"></textarea>
+          <small class="form-error" id="errPermissionNote"></small>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" id="cancelPermissionModal">Batal</button>
+        <button type="submit" class="btn btn-primary" id="savePermissionBtn">Kirim Pengajuan</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="../js/mock-data.js"></script>
+<script src="../js/adapters/local.js"></script>
+<script src="../js/adapters/mysql.js"></script>
+<script src="../js/adapters/firebase.js"></script>
+<script src="../js/api.js"></script>
+<script src="../js/notifications.js"></script>
+<script src="../js/app.js"></script>
+<script src="../js/permissions.js"></script>
+</body>
+</html>

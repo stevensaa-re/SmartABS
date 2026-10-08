@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Data Pengguna — SMARTABS</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/table.css">
+  <link rel="stylesheet" href="../css/responsive.css">
+  <script src="../js/config.js"></script>
+  <script src="../js/utils.js"></script>
+  <script src="../js/auth.js"></script>
+</head>
+<body data-role="admin" data-page="users">
+<script src="../js/guard.js"></script>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <div class="main">
+    <header class="navbar" id="navbar"></header>
+
+    <main class="content">
+      <div class="page-head">
+        <div>
+          <h1>Data Pengguna</h1>
+          <p>Kelola akun Admin, Guru, dan Siswa SMARTABS.</p>
+        </div>
+        <button class="btn btn-primary" id="btnAddUser">
+          <i class="fa-solid fa-plus"></i> Tambah Pengguna
+        </button>
+      </div>
+
+      <section class="card">
+        <div class="table-toolbar">
+          <div class="search-box">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="searchUser" class="form-control" placeholder="Cari nama atau username...">
+          </div>
+          <div class="filter-group">
+            <select id="filterRole" class="form-control">
+              <option value="">Semua Role</option>
+              <option value="admin">Admin</option>
+              <option value="guru">Guru</option>
+              <option value="siswa">Siswa</option>
+            </select>
+            <select id="filterStatus" class="form-control">
+              <option value="">Semua Status</option>
+              <option value="Aktif">Aktif</option>
+              <option value="Nonaktif">Nonaktif</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Nama</th>
+                <th>Username</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th class="text-right">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="userTableBody"></tbody>
+          </table>
+        </div>
+        <div class="table-footer">
+          <span id="userCount" class="text-muted">0 pengguna</span>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<!-- Modal Form Pengguna -->
+<div class="modal" id="userModal">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <h3 id="userModalTitle">Tambah Pengguna</h3>
+      <button class="icon-btn" id="closeUserModal" aria-label="Tutup">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <form id="userForm" novalidate>
+      <div class="modal-body">
+        <input type="hidden" id="userId">
+
+        <div class="form-group">
+          <label for="userName">Nama Lengkap <span class="req">*</span></label>
+          <input type="text" id="userName" class="form-control" placeholder="Contoh: Budi Santoso" required>
+          <small class="form-error" id="errUserName"></small>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="userUsername">Username <span class="req">*</span></label>
+            <input type="text" id="userUsername" class="form-control" placeholder="budi" required>
+            <small class="form-error" id="errUserUsername"></small>
+          </div>
+          <div class="form-group">
+            <label for="userPassword">Password <span class="req" id="userPasswordReq">*</span></label>
+            <input type="password" id="userPassword" class="form-control" placeholder="Minimal 6 karakter" autocomplete="new-password">
+            <small class="form-error" id="errUserPassword"></small>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="userRole">Role <span class="req">*</span></label>
+            <select id="userRole" class="form-control" required>
+              <option value="admin">Admin</option>
+              <option value="guru">Guru</option>
+              <option value="siswa">Siswa</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="userStatus">Status</label>
+            <select id="userStatus" class="form-control">
+              <option value="Aktif">Aktif</option>
+              <option value="Nonaktif">Nonaktif</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="userEmail">Email</label>
+          <input type="email" id="userEmail" class="form-control" placeholder="nama@smartabs.sch.id">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" id="cancelUserModal">Batal</button>
+        <button type="submit" class="btn btn-primary" id="saveUserBtn">
+          <span class="btn-text">Simpan</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="../js/mock-data.js"></script>
+<script src="../js/adapters/local.js"></script>
+<script src="../js/adapters/mysql.js"></script>
+<script src="../js/adapters/firebase.js"></script>
+<script src="../js/api.js"></script>
+<script src="../js/notifications.js"></script>
+<script src="../js/app.js"></script>
+<script src="../js/users.js"></script>
+</body>
+</html>

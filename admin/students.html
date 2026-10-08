@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Data Siswa — SMARTABS</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/table.css">
+  <link rel="stylesheet" href="../css/responsive.css">
+  <script src="../js/config.js"></script>
+  <script src="../js/utils.js"></script>
+  <script src="../js/auth.js"></script>
+</head>
+<body data-role="admin" data-page="students">
+<script src="../js/guard.js"></script>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <div class="main">
+    <header class="navbar" id="navbar"></header>
+
+    <main class="content">
+      <div class="page-head">
+        <div>
+          <h1>Data Siswa</h1>
+          <p>Kelola data induk siswa beserta kelasnya.</p>
+        </div>
+        <button class="btn btn-primary" id="btnAddStudent">
+          <i class="fa-solid fa-plus"></i> Tambah Siswa
+        </button>
+      </div>
+
+      <section class="card">
+        <div class="table-toolbar">
+          <div class="search-box">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="searchStudent" class="form-control" placeholder="Cari NIS atau nama siswa...">
+          </div>
+          <div class="filter-group">
+            <select id="filterClass" class="form-control">
+              <option value="">Semua Kelas</option>
+            </select>
+            <select id="filterStudentStatus" class="form-control">
+              <option value="">Semua Status</option>
+              <option value="Aktif">Aktif</option>
+              <option value="Nonaktif">Nonaktif</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>NIS</th>
+                <th>Nama</th>
+                <th>Kelas</th>
+                <th>L/P</th>
+                <th>Status</th>
+                <th class="text-right">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="studentTableBody"></tbody>
+          </table>
+        </div>
+        <div class="table-footer">
+          <span id="studentCount" class="text-muted">0 siswa</span>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<!-- Modal Form Siswa -->
+<div class="modal" id="studentModal">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <h3 id="studentModalTitle">Tambah Siswa</h3>
+      <button class="icon-btn" id="closeStudentModal" aria-label="Tutup">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <form id="studentForm" novalidate>
+      <div class="modal-body">
+        <input type="hidden" id="studentMode">
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="studentNis">NIS <span class="req">*</span></label>
+            <input type="text" id="studentNis" class="form-control" placeholder="2024001" required>
+            <small class="form-error" id="errStudentNis"></small>
+          </div>
+          <div class="form-group">
+            <label for="studentGender">Jenis Kelamin</label>
+            <select id="studentGender" class="form-control">
+              <option value="L">Laki-laki</option>
+              <option value="P">Perempuan</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="studentName">Nama Lengkap <span class="req">*</span></label>
+          <input type="text" id="studentName" class="form-control" placeholder="Contoh: Andi Pratama" required>
+          <small class="form-error" id="errStudentName"></small>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="studentClass">Kelas <span class="req">*</span></label>
+            <select id="studentClass" class="form-control" required></select>
+          </div>
+          <div class="form-group">
+            <label for="studentStatus">Status</label>
+            <select id="studentStatus" class="form-control">
+              <option value="Aktif">Aktif</option>
+              <option value="Nonaktif">Nonaktif</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="studentPhone">No. HP Wali</label>
+          <input type="text" id="studentPhone" class="form-control" placeholder="0812-xxxx-xxxx">
+        </div>
+
+        <div class="form-group">
+          <label for="studentUser">Akun Login (opsional)</label>
+          <select id="studentUser" class="form-control">
+            <option value="">— Belum dihubungkan —</option>
+          </select>
+          <small class="text-muted">Hubungkan agar siswa dapat login dan melihat data kehadirannya sendiri.</small>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" id="cancelStudentModal">Batal</button>
+        <button type="submit" class="btn btn-primary" id="saveStudentBtn">Simpan</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Detail Siswa -->
+<div class="modal" id="detailModal">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <h3>Detail Siswa</h3>
+      <button class="icon-btn" id="closeDetailModal" aria-label="Tutup">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <div class="modal-body" id="detailBody"></div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-outline" id="closeDetailBtn">Tutup</button>
+    </div>
+  </div>
+</div>
+
+<script src="../js/mock-data.js"></script>
+<script src="../js/adapters/local.js"></script>
+<script src="../js/adapters/mysql.js"></script>
+<script src="../js/adapters/firebase.js"></script>
+<script src="../js/api.js"></script>
+<script src="../js/notifications.js"></script>
+<script src="../js/app.js"></script>
+<script src="../js/students.js"></script>
+</body>
+</html>

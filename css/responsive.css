@@ -1,0 +1,45 @@
+/* =========================================================
+   SMARTABS — Responsive (tablet & mobile)
+   ========================================================= */
+
+@media (max-width: 1024px) {
+  .sidebar { transform: translateX(-100%); box-shadow: var(--shadow); }
+  .sidebar.open { transform: translateX(0); }
+  .main { margin-left: 0; }
+  #menuToggle { display: grid; }
+  .grid-2 { grid-template-columns: 1fr; }
+  .navbar-date { display: none; }
+}
+
+@media (max-width: 860px) {
+  .login-wrapper { grid-template-columns: 1fr; }
+  .login-brand { display: none; }
+  .login-form-panel { min-height: 100vh; background: linear-gradient(145deg, #0f172a, #1e3a8a); }
+}
+
+@media (max-width: 640px) {
+  .content { padding: 16px 14px 32px; }
+  .navbar { padding: 0 14px; }
+  .user-info { display: none; }
+  .navbar-title p { display: none; }
+  .form-row { grid-template-columns: 1fr; }
+  .stats-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
+  .stat-card { padding: 14px; gap: 10px; }
+  .stat-icon { width: 40px; height: 40px; font-size: 17px; }
+  .stat-value { font-size: 20px; }
+  .chart-box { height: 240px; }
+  .profile-meta { margin-left: 0; width: 100%; justify-content: space-between; gap: 12px; }
+  .attendance-info { grid-template-columns: 1fr; }
+  .attendance-panel { padding: 26px 18px; }
+  .table-toolbar { padding: 12px 14px; }
+  .search-box { max-width: none; flex-basis: 100%; }
+  .filter-group { width: 100%; }
+  .filter-group .form-control { flex: 1; min-width: 120px; }
+  .data-table thead th, .data-table tbody td, .data-table tfoot td { padding: 11px 12px; }
+  .demo-grid { grid-template-columns: 1fr; }
+  .login-card { padding: 26px 20px; }
+}
+
+@media (max-width: 400px) {
+  .stats-grid { grid-template-columns: 1fr; }
+}

@@ -1,0 +1,59 @@
+const router = require('express').Router();
+const { query, queryOne } = require('../db');
+const { requireRole } = require('../auth');
+const { asyncHandler, assert, makeId, str, buildSet } = require('../util');
+
+const SELECT = 'SELECT id, name, level, major, homeroom, capacity FROM classes';
+
+function validate(body, { creating }) {
+  const data = {
+    name: body.name === undefined ? undefined : str(body.name),
+    level: body.level === undefined ? undefined : str(body.level),
+    major: body.major === undefined ? undefined : str(body.major),
+    homeroom: body.homeroom === undefined ? undefined : str(body.homeroom),
+    capacity: body.capacity === undefined ? undefined : Number(body.capacity)
+  };
+
+  if (creating || data.name !== undefined) assert(data.name && data.name.length >= 3 && data.name.length <= 50, 'Nama kelas 3-50 karakter.');
+  if (creating || data.level !== undefined) assert(data.level && data.level.length <= 10, 'Tingkat kelas wajib diisi.');
+  if (creating || data.major !== undefined) assert(data.major && data.major.length <= 30, 'Jurusan wajib diisi.');
+  if (data.homeroom !== undefined) assert(data.homeroom.length <= 100, 'Nama wali kelas terlalu panjang.');
+  if (data.capacity !== undefined) assert(Number.isInteger(data.capacity) && data.capacity > 0 && data.capacity < 200, 'Kapasitas tidak valid.');
+  return data;
+}
+
+router.get('/', asyncHandler(async (req, res) => {
+  res.json(await query(`${SELECT} ORDER BY level, name`));
+}));
+
+router.post('/', requireRole('admin'), asyncHandler(async (req, res) => {
+  const data = validate(req.body, { creating: true });
+  const id = makeId('K');
+
+  await query(
+    'INSERT INTO classes (id, name, level, major, homeroom, capacity) VALUES (?, ?, ?, ?, ?, ?)',
+    [id, data.name, data.level, data.major, data.homeroom || '', data.capacity || 36]
+  );
+  res.status(201).json(await queryOne(`${SELECT} WHERE id = ?`, [id]));
+}));
+
+router.put('/:id', requireRole('admin'), asyncHandler(async (req, res) => {
+  assert(await queryOne('SELECT id FROM classes WHERE id = ?', [req.params.id]), 'Kelas tidak ditemukan.', 404);
+
+  const data = validate(req.body, { creating: false });
+  const set = buildSet(data);
+
+  /* Rename aman: tabel lain memakai class_id, bukan nama kelas */
+  if (!set.empty) await query(`UPDATE classes SET ${set.sql} WHERE id = ?`, [...set.params, req.params.id]);
+  res.json(await queryOne(`${SELECT} WHERE id = ?`, [req.params.id]));
+}));
+
+router.delete('/:id', requireRole('admin'), asyncHandler(async (req, res) => {
+  const used = await queryOne('SELECT COUNT(*) AS total FROM students WHERE class_id = ?', [req.params.id]);
+  assert(Number(used.total) === 0, 'Kelas masih memiliki siswa. Pindahkan siswa terlebih dahulu.', 409);
+
+  await query('DELETE FROM classes WHERE id = ?', [req.params.id]);   // jadwal kelas ikut terhapus
+  res.json({ ok: true });
+}));
+
+module.exports = router;
