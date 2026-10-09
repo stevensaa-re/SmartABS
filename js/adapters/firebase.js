@@ -54,8 +54,7 @@ const FirebaseAdapter = (() => {
       await loadScript(`${SDK_BASE}firebase-app-compat.js`);
       await Promise.all([
         loadScript(`${SDK_BASE}firebase-auth-compat.js`),
-        loadScript(`${SDK_BASE}firebase-firestore-compat.js`),
-        loadScript(`${SDK_BASE}firebase-functions-compat.js`)
+        loadScript(`${SDK_BASE}firebase-firestore-compat.js`)
       ]);
 
       if (!firebase.apps.length) firebase.initializeApp(APP_CONFIG.FIREBASE);
@@ -261,18 +260,32 @@ const FirebaseAdapter = (() => {
         email: payload.email ?? current.email
       };
 
-      const result = await firebase.functions().httpsCallable('updateManagedUser')({
-        uid: id,
-        ...changes,
-        password: payload.password || ''
-      });
-      if (!result.data || !result.data.ok) throw new Error('Perubahan akun tidak dikonfirmasi Firebase.');
+      if (changes.role !== current.role) {
+        const [teacher, student] = await Promise.all([
+          col('teachers').where('username', '==', current.username).limit(1).get(),
+          col('students').where('userId', '==', id).limit(1).get()
+        ]);
+        if (!teacher.empty || !student.empty) {
+          throw new Error('Lepas atau hapus profil guru/siswa sebelum mengganti role akun.');
+        }
+      }
+
+      if (id === Session.get()?.id && (changes.role !== 'admin' || changes.status !== 'Aktif')) {
+        throw new Error('Anda tidak dapat menonaktifkan atau mengubah role akun yang sedang digunakan.');
+      }
+      if (payload.passwordReset) {
+        await auth.sendPasswordResetEmail(loginEmail(current.username));
+      }
+      await ref.update(changes);
       return { id, ...current, ...changes };
     }),
 
     deleteUser: (id) => run(async () => {
-      const result = await firebase.functions().httpsCallable('deleteManagedUser')({ uid: id });
-      if (!result.data || !result.data.ok) throw new Error('Penghapusan akun tidak dikonfirmasi Firebase.');
+      if (id === Session.get()?.id) throw new Error('Anda tidak dapat menonaktifkan akun yang sedang digunakan.');
+      const ref = col('users').doc(id);
+      const snap = await ref.get();
+      if (!snap.exists) return true;
+      await ref.update({ status: 'Nonaktif' });
       return true;
     }),
 

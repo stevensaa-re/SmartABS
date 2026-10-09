@@ -25,6 +25,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('closeUserModal').addEventListener('click', () => closeModal('userModal'));
   document.getElementById('cancelUserModal').addEventListener('click', () => closeModal('userModal'));
   document.getElementById('userForm').addEventListener('submit', simpanUser);
+  document.getElementById('resetUserPasswordBtn').addEventListener('click', kirimResetPassword);
 });
 
 /* ---------- Render tabel ---------- */
@@ -59,8 +60,8 @@ function renderUsers() {
               <button class="btn-icon" data-action="edit" data-id="${user.id}" title="Edit">
                 <i class="fa-solid fa-pen"></i>
               </button>
-              <button class="btn-icon danger" data-action="delete" data-id="${user.id}" title="Hapus">
-                <i class="fa-solid fa-trash"></i>
+              <button class="btn-icon danger" data-action="delete" data-id="${user.id}" title="Nonaktifkan akun">
+                <i class="fa-solid fa-user-slash"></i>
               </button>
             </div>
           </td>
@@ -92,10 +93,12 @@ function openUserForm(id = null) {
   document.getElementById('userId').value = id || '';
   document.getElementById('userModalTitle').textContent = id ? 'Edit Pengguna' : 'Tambah Pengguna';
 
-  /* Password tidak pernah ditampilkan. Saat edit, kosong = tidak diubah. */
-  document.getElementById('userPassword').placeholder =
-    id ? 'Kosongkan jika tidak diubah' : 'Minimal 6 karakter';
+  /* Existing account passwords can only be changed through Firebase's reset email flow. */
+  const firebaseBackend = APP_CONFIG.BACKEND === 'firebase';
+  document.getElementById('userPassword').placeholder = id ? 'Kosongkan jika tidak diubah' : 'Minimal 6 karakter';
+  document.getElementById('userPassword').classList.toggle('hidden', !!id && firebaseBackend);
   document.getElementById('userPasswordReq').classList.toggle('hidden', !!id);
+  document.getElementById('resetUserPasswordBtn').classList.toggle('hidden', !id || !firebaseBackend);
 
   if (id) {
     const user = daftarPengguna.find((item) => item.id === id);
@@ -119,7 +122,9 @@ async function simpanUser(event) {
   const id       = document.getElementById('userId').value;
   const name     = document.getElementById('userName').value.trim();
   const username = document.getElementById('userUsername').value.trim();
-  const password = document.getElementById('userPassword').value.trim();
+  const password = id && APP_CONFIG.BACKEND === 'firebase'
+    ? ''
+    : document.getElementById('userPassword').value.trim();
   const role     = document.getElementById('userRole').value;
   const status   = document.getElementById('userStatus').value;
   const email    = document.getElementById('userEmail').value.trim();
@@ -176,6 +181,23 @@ async function simpanUser(event) {
   }
 }
 
+async function kirimResetPassword() {
+  const id = document.getElementById('userId').value;
+  const user = daftarPengguna.find((item) => item.id === id);
+  if (!user) return;
+
+  const button = document.getElementById('resetUserPasswordBtn');
+  button.disabled = true;
+  try {
+    await API.updateUser(id, { passwordReset: true });
+    Toast.success(`Tautan reset dikirim ke email login ${user.username}@${APP_CONFIG.FIREBASE_LOGIN_DOMAIN}.`);
+  } catch (error) {
+    Toast.error(error.message || 'Gagal mengirim tautan reset password.');
+  } finally {
+    button.disabled = false;
+  }
+}
+
 /* ---------- Hapus ---------- */
 
 async function hapusUser(id) {
@@ -189,9 +211,9 @@ async function hapusUser(id) {
   }
 
   const confirmed = await confirmDialog({
-    title: 'Hapus Pengguna?',
-    message: `Akun "${user.name}" akan dihapus permanen dan tidak dapat dikembalikan.`,
-    confirmText: 'Ya, Hapus',
+    title: 'Nonaktifkan Pengguna?',
+    message: `Akun "${user.name}" tidak dapat login lagi. Data akun dan riwayat tetap disimpan.`,
+    confirmText: 'Nonaktifkan',
     danger: true
   });
 
@@ -201,8 +223,8 @@ async function hapusUser(id) {
     await API.deleteUser(id);
     daftarPengguna = await API.getUsers();
     renderUsers();
-    Toast.success('Pengguna berhasil dihapus.');
+    Toast.success('Akun dinonaktifkan. Data akun dan riwayat tetap tersimpan.');
   } catch (error) {
-    Toast.error('Gagal menghapus pengguna.');
+    Toast.error(error.message || 'Gagal menonaktifkan pengguna.');
   }
 }
