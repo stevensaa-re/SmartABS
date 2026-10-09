@@ -28,7 +28,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (role === 'admin') {
     isiPilihanKelasForm();
     daftarAkunSiswa = (await API.getUsers()).filter((u) => u.role === 'siswa' && u.status === 'Aktif');
-    document.getElementById('btnAddStudent').addEventListener('click', () => openStudentForm());
+    document.getElementById('btnAddStudent').addEventListener('click', () => {
+      if (!daftarKelas.length) {
+        Toast.warning('Buat kelas terlebih dahulu di menu Data Kelas sebelum menambahkan siswa.');
+        return;
+      }
+      openStudentForm();
+    });
     document.getElementById('closeStudentModal').addEventListener('click', () => closeModal('studentModal'));
     document.getElementById('cancelStudentModal').addEventListener('click', () => closeModal('studentModal'));
     document.getElementById('studentForm').addEventListener('submit', simpanSiswa);
@@ -64,7 +70,7 @@ function isiFilterKelas() {
 
 function isiPilihanKelasForm() {
   const select = document.getElementById('studentClass');
-  select.innerHTML = daftarKelas
+  select.innerHTML = '<option value="">— Pilih kelas —</option>' + daftarKelas
     .map((kelas) => `<option value="${escapeHtml(kelas.name)}">${escapeHtml(kelas.name)}</option>`)
     .join('');
 }
@@ -200,6 +206,12 @@ async function simpanSiswa(event) {
   }
   if (name.length < 3) {
     document.getElementById('errStudentName').textContent = 'Nama minimal 3 karakter.';
+    valid = false;
+  }
+  if (!className || !daftarKelas.some((kelas) => kelas.name === className)) {
+    Toast.warning(daftarKelas.length
+      ? 'Pilih kelas yang valid sebelum menyimpan siswa.'
+      : 'Belum ada data kelas. Tambahkan kelas terlebih dahulu di menu Data Kelas.');
     valid = false;
   }
   if (!valid) return;

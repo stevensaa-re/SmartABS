@@ -26,14 +26,23 @@ document.addEventListener('DOMContentLoaded', async () => {
   daftarKelasGuru = classes;
 
   document.getElementById('teacherClass').innerHTML =
-    '<option value="">— Tidak ada —</option>' +
+    '<option value="">— Pilih kelas —</option>' +
     classes.map((kelas) => `<option value="${escapeHtml(kelas.name)}">${escapeHtml(kelas.name)}</option>`).join('');
+  document.getElementById('teacherClassHint').textContent = classes.length
+    ? ''
+    : 'Belum ada kelas. Tambahkan kelas terlebih dahulu di menu Data Kelas.';
 
   renderGuru();
 
   document.getElementById('searchTeacher').addEventListener('input', debounce(renderGuru));
   document.getElementById('filterTeacherStatus').addEventListener('change', renderGuru);
-  document.getElementById('btnAddTeacher').addEventListener('click', () => openTeacherForm());
+  document.getElementById('btnAddTeacher').addEventListener('click', () => {
+    if (!daftarKelasGuru.length) {
+      Toast.warning('Buat kelas terlebih dahulu di menu Data Kelas sebelum menambahkan guru.');
+      return;
+    }
+    openTeacherForm();
+  });
   document.getElementById('closeTeacherModal').addEventListener('click', () => closeModal('teacherModal'));
   document.getElementById('cancelTeacherModal').addEventListener('click', () => closeModal('teacherModal'));
   document.getElementById('teacherForm').addEventListener('submit', simpanGuru);
@@ -140,6 +149,12 @@ async function simpanGuru(event) {
   }
   if (name.length < 3) {
     document.getElementById('errTeacherName').textContent = 'Nama minimal 3 karakter.';
+    valid = false;
+  }
+  if (!className || !daftarKelasGuru.some((kelas) => kelas.name === className)) {
+    Toast.warning(daftarKelasGuru.length
+      ? 'Pilih kelas yang valid untuk guru ini.'
+      : 'Belum ada data kelas. Tambahkan kelas terlebih dahulu di menu Data Kelas.');
     valid = false;
   }
   if (!valid) return;

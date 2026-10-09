@@ -118,6 +118,14 @@ const FirebaseAdapter = (() => {
     return { nis: snap.id, ...snap.data() };
   }
 
+  async function requireClass(className) {
+    const normalized = String(className || '').trim();
+    if (!normalized) throw new Error('Pilih kelas terlebih dahulu.');
+    const classes = await col('classes').where('name', '==', normalized).limit(1).get();
+    if (classes.empty) throw new Error('Kelas tidak ditemukan. Buat atau pilih kelas yang tersedia.');
+    return normalized;
+  }
+
   async function assignedClassName() {
     const session = Session.get();
     if (!session || !['guru', 'siswa'].includes(session.role)) return '';
@@ -305,10 +313,11 @@ const FirebaseAdapter = (() => {
     }),
 
     createTeacher: (payload) => run(async () => {
+      const className = await requireClass(payload.className);
       const exists = await col('teachers').where('username', '==', payload.username).limit(1).get();
       if (!exists.empty) throw new Error('Akun tersebut sudah terdaftar sebagai guru.');
 
-      const data = { subject: '', className: '', status: 'Aktif', ...payload };
+      const data = { subject: '', status: 'Aktif', ...payload, className };
       const users = await col('users').where('usernameLower', '==', String(data.username).toLowerCase()).limit(1).get();
       if (users.empty || users.docs[0].data().role !== 'guru') {
         throw new Error('Pilih akun guru yang valid sebelum membuat profil guru.');
@@ -325,6 +334,7 @@ const FirebaseAdapter = (() => {
       const ref = col('teachers').doc(id);
       const current = await ref.get();
       if (!current.exists) throw new Error('Data guru tidak ditemukan.');
+      if (payload.className !== undefined) payload.className = await requireClass(payload.className);
       if (payload.username && payload.username !== current.data().username) {
         throw new Error('Akun guru tidak dapat diganti dari formulir ini.');
       }
@@ -388,6 +398,7 @@ const FirebaseAdapter = (() => {
 
     createStudent: (payload) => run(async () => {
       const nis = String(payload.nis);
+      const className = await requireClass(payload.className);
       const ref = col('students').doc(nis);
 
       if ((await ref.get()).exists) throw new Error('NIS sudah terdaftar.');
@@ -402,7 +413,7 @@ const FirebaseAdapter = (() => {
       }
 
       const { nis: _ignore, ...rest } = payload;
-      const data = { userId: '', phone: '', gender: 'L', status: 'Aktif', ...rest };
+      const data = { userId: '', phone: '', gender: 'L', status: 'Aktif', ...rest, className };
       const batch = db.batch();
       batch.set(ref, data);
       if (userRef) batch.update(userRef, { nis });
@@ -418,6 +429,7 @@ const FirebaseAdapter = (() => {
 
       const current = snap.data();
       const { nis: _ignore, ...rest } = payload;
+      if (rest.className !== undefined) rest.className = await requireClass(rest.className);
 
       if (rest.userId && rest.userId !== current.userId) {
         const linked = await col('students').where('userId', '==', rest.userId).limit(1).get();
