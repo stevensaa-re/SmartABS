@@ -53,11 +53,13 @@ async function ensureAuthUser(user) {
   for (const u of seed.users) {
     uidOf[u.id] = await ensureAuthUser(u);
     const student = seed.students.find((s) => s.userId === u.id);
+    const teacher = seed.teachers.find((t) => t.username.toLowerCase() === u.username.toLowerCase());
 
     ops.push((b) => b.set(db.collection('users').doc(uidOf[u.id]), {
       name: u.name, username: u.username, usernameLower: u.username.toLowerCase(),
       role: u.role, status: u.status, email: u.email,
-      ...(student ? { nis: student.nis } : {})
+      ...(student ? { nis: student.nis } : {}),
+      ...(teacher ? { className: teacher.className } : {})
     }));
   }
 

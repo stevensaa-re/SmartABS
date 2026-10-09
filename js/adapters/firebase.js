@@ -118,6 +118,18 @@ const FirebaseAdapter = (() => {
     return { nis: snap.id, ...snap.data() };
   }
 
+  async function assignedClassName() {
+    const session = Session.get();
+    if (!session || !['guru', 'siswa'].includes(session.role)) return '';
+    const profile = await col('users').doc(session.id).get();
+    if (!profile.exists) return '';
+    if (session.role === 'guru') return String(profile.data().className || '');
+    const nis = String(profile.data().nis || session.nis || '');
+    if (!nis) return '';
+    const student = await col('students').doc(nis).get();
+    return student.exists ? String(student.data().className || '') : '';
+  }
+
   const loginEmail = (username) =>
     `${String(username).trim().toLowerCase()}@${APP_CONFIG.FIREBASE_LOGIN_DOMAIN}`;
 
@@ -269,7 +281,13 @@ const FirebaseAdapter = (() => {
 
     /* ---------------- TEACHERS ---------------- */
 
-    getTeachers: () => run(async () => fromSnap(await col('teachers').get())),
+    getTeachers: () => run(async () => {
+      const session = Session.get();
+      const ref = session && session.role === 'guru'
+        ? col('teachers').where('username', '==', session.username)
+        : col('teachers');
+      return fromSnap(await ref.get());
+    }),
 
     getTeacherByUsername: (username) => run(async () => {
       const snap = await col('teachers').where('username', '==', username).limit(1).get();
@@ -281,28 +299,63 @@ const FirebaseAdapter = (() => {
       if (!exists.empty) throw new Error('Akun tersebut sudah terdaftar sebagai guru.');
 
       const data = { subject: '', className: '', status: 'Aktif', ...payload };
-      const ref = await col('teachers').add(data);
+      const users = await col('users').where('usernameLower', '==', String(data.username).toLowerCase()).limit(1).get();
+      if (users.empty || users.docs[0].data().role !== 'guru') {
+        throw new Error('Pilih akun guru yang valid sebelum membuat profil guru.');
+      }
+      const ref = col('teachers').doc();
+      const batch = db.batch();
+      batch.set(ref, data);
+      batch.update(users.docs[0].ref, { className: data.className });
+      await batch.commit();
       return { id: ref.id, ...data };
     }),
 
     updateTeacher: (id, payload) => run(async () => {
+      const ref = col('teachers').doc(id);
+      const current = await ref.get();
+      if (!current.exists) throw new Error('Data guru tidak ditemukan.');
+      if (payload.username && payload.username !== current.data().username) {
+        throw new Error('Akun guru tidak dapat diganti dari formulir ini.');
+      }
       if (payload.username) {
         const dup = await col('teachers').where('username', '==', payload.username).get();
         if (dup.docs.some((doc) => doc.id !== id)) throw new Error('Akun tersebut sudah terdaftar sebagai guru.');
       }
-      await col('teachers').doc(id).update(payload);
-      return fromDoc(await col('teachers').doc(id).get());
+      const users = await col('users').where('usernameLower', '==', String(current.data().username).toLowerCase()).limit(1).get();
+      const batch = db.batch();
+      batch.update(ref, payload);
+      if (!users.empty && payload.className !== undefined) {
+        batch.update(users.docs[0].ref, { className: payload.className });
+      }
+      await batch.commit();
+      return fromDoc(await ref.get());
     }),
 
     deleteTeacher: (id) => run(async () => {
-      await col('teachers').doc(id).delete();
+      const ref = col('teachers').doc(id);
+      const teacher = await ref.get();
+      if (!teacher.exists) return true;
+      const users = await col('users').where('usernameLower', '==', String(teacher.data().username).toLowerCase()).limit(1).get();
+      const batch = db.batch();
+      batch.delete(ref);
+      if (!users.empty) batch.update(users.docs[0].ref, { className: '' });
+      await batch.commit();
       return true;
     }),
 
     /* ---------------- STUDENTS ---------------- */
 
-    getStudents: () => run(async () =>
-      fromSnap(await col('students').get()).map(({ id, ...student }) => ({ nis: id, ...student }))),
+    getStudents: () => run(async () => {
+      const className = await assignedClassName();
+      const session = Session.get();
+      let ref = col('students');
+      if (session && session.role === 'guru') {
+        if (!className) return [];
+        ref = ref.where('className', '==', className);
+      }
+      return fromSnap(await ref.get()).map(({ id, ...student }) => ({ nis: id, ...student }));
+    }),
 
     getStudentByNis: (nis) => run(async () => {
       const snap = await col('students').doc(String(nis)).get();
@@ -373,19 +426,13 @@ const FirebaseAdapter = (() => {
       const id = String(nis);
       const ref = col('students').doc(id);
       const snap = await ref.get();
+      if (!snap.exists) return true;
 
-      const [attendance, permissions] = await Promise.all([
-        col('attendance').where('studentId', '==', id).get(),
-        col('permissions').where('studentId', '==', id).get()
-      ]);
+      const batch = db.batch();
+      batch.delete(ref);
+      await batch.commit();
 
-      const ops = [(batch) => batch.delete(ref)];
-      attendance.docs.forEach((doc) => ops.push((batch) => batch.delete(doc.ref)));
-      permissions.docs.forEach((doc) => ops.push((batch) => batch.delete(doc.ref)));
-
-      await commitInChunks(ops);
-
-      if (snap.exists && snap.data().userId) {
+      if (snap.data().userId) {
         await col('users').doc(snap.data().userId)
           .update({ nis: firebase.firestore.FieldValue.delete() }).catch(() => {});
       }
@@ -394,7 +441,14 @@ const FirebaseAdapter = (() => {
 
     /* ---------------- CLASSES ---------------- */
 
-    getClasses: () => run(async () => fromSnap(await col('classes').get())),
+    getClasses: () => run(async () => {
+      const className = await assignedClassName();
+      const session = Session.get();
+      const ref = session && ['guru', 'siswa'].includes(session.role)
+        ? col('classes').where('name', '==', className || '__unassigned__')
+        : col('classes');
+      return fromSnap(await ref.get());
+    }),
 
     createClass: (payload) => run(async () => {
       const exists = await col('classes').where('name', '==', payload.name).limit(1).get();
@@ -451,7 +505,14 @@ const FirebaseAdapter = (() => {
 
     /* ---------------- SCHEDULES ---------------- */
 
-    getSchedules: () => run(async () => fromSnap(await col('schedules').get())),
+    getSchedules: () => run(async () => {
+      const className = await assignedClassName();
+      const session = Session.get();
+      const ref = session && ['guru', 'siswa'].includes(session.role)
+        ? col('schedules').where('className', '==', className || '__unassigned__')
+        : col('schedules');
+      return fromSnap(await ref.get());
+    }),
 
     createSchedule: (payload) => run(async () => {
       const ref = await col('schedules').add(payload);
@@ -499,6 +560,12 @@ const FirebaseAdapter = (() => {
 
     getAttendanceRange: (from, to, className = null) => run(async () => {
       let ref = col('attendance');
+      const session = Session.get();
+      const assigned = await assignedClassName();
+      if (session && session.role === 'guru') {
+        if (!assigned || (className && className !== assigned)) return [];
+        ref = ref.where('className', '==', assigned);
+      }
       if (from) ref = ref.where('date', '>=', from);
       if (to) ref = ref.where('date', '<=', to);
 
@@ -507,7 +574,14 @@ const FirebaseAdapter = (() => {
     }),
 
     getAttendanceByDate: (date, className = null) => run(async () => {
-      const rows = fromSnap(await col('attendance').where('date', '==', date).get());
+      let ref = col('attendance').where('date', '==', date);
+      const session = Session.get();
+      const assigned = await assignedClassName();
+      if (session && session.role === 'guru') {
+        if (!assigned || (className && className !== assigned)) return [];
+        ref = ref.where('className', '==', assigned);
+      }
+      const rows = fromSnap(await ref.get());
       return className ? rows.filter((row) => row.className === className) : rows;
     }),
 
@@ -543,8 +617,14 @@ const FirebaseAdapter = (() => {
 
     /* ---------------- PERMISSIONS ---------------- */
 
-    getPermissions: () => run(async () =>
-      fromSnap(await col('permissions').get()).sort(byDateDesc)),
+    getPermissions: () => run(async () => {
+      const className = await assignedClassName();
+      const session = Session.get();
+      const ref = session && session.role === 'guru'
+        ? col('permissions').where('className', '==', className || '__unassigned__')
+        : col('permissions');
+      return fromSnap(await ref.get()).sort(byDateDesc);
+    }),
 
     getPermissionsByStudent: (nis) => run(async () =>
       fromSnap(await col('permissions').where('studentId', '==', String(nis)).get()).sort(byDateDesc)),
@@ -608,10 +688,18 @@ const FirebaseAdapter = (() => {
 
     getReport: ({ from, to, className, status } = {}) => run(async () => {
       let ref = col('attendance');
+      const session = Session.get();
+      const assigned = await assignedClassName();
+      if (session && session.role === 'guru') {
+        if (!assigned || (className && className !== assigned)) return [];
+        ref = ref.where('className', '==', assigned);
+      }
       if (from) ref = ref.where('date', '>=', from);
       if (to) ref = ref.where('date', '<=', to);
 
-      const [studentSnap, attendanceSnap] = await Promise.all([col('students').get(), ref.get()]);
+      let studentsRef = col('students');
+      if (session && session.role === 'guru') studentsRef = studentsRef.where('className', '==', assigned);
+      const [studentSnap, attendanceSnap] = await Promise.all([studentsRef.get(), ref.get()]);
 
       const students = studentSnap.docs
         .map((doc) => ({ nis: doc.id, ...doc.data() }))

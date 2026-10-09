@@ -28,27 +28,48 @@ service cloud.firestore {
     function isGuru()       { return active() && me().role == 'guru'; }
     function isSiswa()      { return active() && me().role == 'siswa'; }
     function isStaff()      { return isAdmin() || isGuru(); }
+    function assignedClass() { return me().get('className', ''); }
+    function teaches(className) {
+      return isGuru() && assignedClass() != '' && className == assignedClass();
+    }
+    function enrolledIn(studentId, className) {
+      return exists(/databases/$(database)/documents/students/$(studentId))
+        && get(/databases/$(database)/documents/students/$(studentId)).data.className == className;
+    }
 
     // NIS milik siswa yang login (diisi admin saat menghubungkan akun ke siswa)
     function myNis()        { return me().get('nis', ''); }
+    function myClassName() {
+      return isSiswa() && myNis() != ''
+        && exists(/databases/$(database)/documents/students/$(myNis()))
+        ? get(/databases/$(database)/documents/students/$(myNis())).data.className
+        : '';
+    }
 
     // ---------- users ----------
     // Pengguna boleh membaca profilnya sendiri; admin mengelola semuanya.
     match /users/{uid} {
       allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
-      allow create, delete: if isAdmin();
+      allow create: if isAdmin()
+        && request.resource.data.role in ['admin', 'guru', 'siswa']
+        && request.resource.data.status in ['Aktif', 'Nonaktif'];
+      allow delete: if isAdmin();
       // Admin boleh mengubah profil lain; pengguna tidak boleh mengubah role/status sendiri.
-      allow update: if isAdmin();
+      allow update: if isAdmin()
+        && request.resource.data.role in ['admin', 'guru', 'siswa']
+        && request.resource.data.status in ['Aktif', 'Nonaktif'];
     }
 
     // ---------- data master ----------
     match /classes/{id} {
-      allow read: if active();
+      allow read: if isAdmin() || teaches(resource.data.name)
+        || (isSiswa() && resource.data.name == myClassName());
       allow write: if isAdmin();
     }
 
     match /schedules/{id} {
-      allow read: if active();
+      allow read: if isAdmin() || teaches(resource.data.className)
+        || (isSiswa() && resource.data.className == myClassName());
       allow write: if isAdmin();
     }
 
@@ -63,17 +84,28 @@ service cloud.firestore {
     }
 
     match /students/{nis} {
-      allow read: if isStaff() || (isSiswa() && nis == myNis());
+      allow read: if isAdmin() || teaches(resource.data.className) || (isSiswa() && nis == myNis());
       allow write: if isAdmin();
     }
 
     // ---------- absensi ----------
     // Dokumen berid "{tanggal}_{nis}" sehingga satu siswa = satu baris per hari.
     match /attendance/{id} {
-      allow read: if isStaff() || (isSiswa() && resource.data.studentId == myNis());
+      allow read: if isAdmin() || teaches(resource.data.className)
+        || (isSiswa() && resource.data.studentId == myNis());
 
-      // Staf boleh menulis apa saja.
-      allow create, update, delete: if isStaff();
+      allow create: if (isAdmin() || teaches(request.resource.data.className))
+        && request.resource.data.status in ['Hadir', 'Izin', 'Sakit', 'Alpa']
+        && id == request.resource.data.date + '_' + request.resource.data.studentId
+        && (isAdmin() || enrolledIn(request.resource.data.studentId, request.resource.data.className));
+      allow update: if isAdmin() || (teaches(resource.data.className)
+        && teaches(request.resource.data.className)
+        && request.resource.data.status in ['Hadir', 'Izin', 'Sakit', 'Alpa']
+        && request.resource.data.studentId == resource.data.studentId
+        && request.resource.data.date == resource.data.date
+        && id == request.resource.data.date + '_' + request.resource.data.studentId
+        && enrolledIn(request.resource.data.studentId, request.resource.data.className));
+      allow delete: if isAdmin() || teaches(resource.data.className);
 
       // Siswa: hanya membuat absensi "Hadir" untuk dirinya sendiri, SEKALI (create saja,
       // tanpa update/delete), dengan id dokumen "{tanggal}_{nis}".
@@ -81,18 +113,32 @@ service cloud.firestore {
       // tidak bisa dicocokkan secara andal di sini. Batas tanggal & jam server yang ketat
       // hanya tersedia pada mode MySQL (atau tambahkan Cloud Function untuk absen mandiri).
       allow create: if isSiswa()
+        && request.resource.data.keys().hasAll(['studentId', 'name', 'className', 'date', 'time', 'status', 'note'])
+        && request.resource.data.keys().hasOnly(['studentId', 'name', 'className', 'date', 'time', 'status', 'note'])
         && request.resource.data.studentId == myNis()
+        && exists(/databases/$(database)/documents/students/$(myNis()))
+        && request.resource.data.name == get(/databases/$(database)/documents/students/$(myNis())).data.name
+        && request.resource.data.className == get(/databases/$(database)/documents/students/$(myNis())).data.className
         && request.resource.data.status == 'Hadir'
         && id == request.resource.data.date + '_' + myNis();
     }
 
     // ---------- izin / sakit ----------
     match /permissions/{id} {
-      allow read: if isStaff() || (isSiswa() && resource.data.studentId == myNis());
-      allow update, delete: if isStaff();
+      allow read: if isAdmin() || teaches(resource.data.className)
+        || (isSiswa() && resource.data.studentId == myNis());
+      allow update: if (isAdmin() || (teaches(resource.data.className)
+        && teaches(request.resource.data.className)))
+        && request.resource.data.status in ['Menunggu', 'Disetujui', 'Ditolak'];
+      allow delete: if isAdmin() || teaches(resource.data.className);
 
       allow create: if isSiswa()
+        && request.resource.data.keys().hasAll(['studentId', 'name', 'className', 'date', 'type', 'note', 'status'])
+        && request.resource.data.keys().hasOnly(['studentId', 'name', 'className', 'date', 'type', 'note', 'status'])
         && request.resource.data.studentId == myNis()
+        && exists(/databases/$(database)/documents/students/$(myNis()))
+        && request.resource.data.name == get(/databases/$(database)/documents/students/$(myNis())).data.name
+        && request.resource.data.className == get(/databases/$(database)/documents/students/$(myNis())).data.className
         && request.resource.data.status == 'Menunggu'
         && request.resource.data.type in ['Izin', 'Sakit'];
     }

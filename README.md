@@ -44,6 +44,8 @@ MYSQL: { API_URL: 'http://localhost:3000/api' }
 1. Firebase Console → buat project → aktifkan **Authentication → Email/Password** dan **Firestore Database**.
 2. Isi `APP_CONFIG.FIREBASE` di `js/config.js` (Project settings → Your apps → Web app), set `BACKEND: 'firebase'`.
 3. Deploy aturan keamanan: `firebase deploy --only firestore:rules` (file `database/firebase/firestore.rules`).
+   Untuk data lama, jalankan migrasi assignment guru setelah menyiapkan Application Default Credentials:
+   `cd database/firebase && node migrate-teacher-assignments.js`.
 4. Untuk mulai tanpa seed script: buat user admin di **Authentication**, lalu buat dokumen
    `users/{uid}` di Firestore dengan field `name`, `username`, `usernameLower`, `role: "admin"`,
    `status: "Aktif"`, dan `email`. Gunakan UID dari Authentication sebagai ID dokumen.
