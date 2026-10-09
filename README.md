@@ -46,13 +46,19 @@ MYSQL: { API_URL: 'http://localhost:3000/api' }
 3. Deploy aturan keamanan: `firebase deploy --only firestore:rules` (file `database/firebase/firestore.rules`).
    Untuk data lama, jalankan migrasi assignment guru setelah menyiapkan Application Default Credentials:
    `cd database/firebase && node migrate-teacher-assignments.js`.
-4. Untuk mulai tanpa seed script: buat user admin di **Authentication**, lalu buat dokumen
+4. Untuk edit password/status dan hapus akun Authentication melalui aplikasi, deploy callable
+   Functions sesuai panduan [`../FIREBASE_SETUP.md`](../FIREBASE_SETUP.md).
+5. Untuk mulai tanpa seed script: buat user admin di **Authentication**, lalu buat dokumen
    `users/{uid}` di Firestore dengan field `name`, `username`, `usernameLower`, `role: "admin"`,
    `status: "Aktif"`, dan `email`. Gunakan UID dari Authentication sebagai ID dokumen.
    Setelah login, admin dapat mengelola data dari aplikasi.
 
 Login memakai username yang diubah menjadi email dengan domain `FIREBASE_LOGIN_DOMAIN`
 di `js/config.js` (misalnya username `admin` menjadi `admin@gmail.com`).
+
+Panduan lengkap untuk setup project yang sudah berisi data, backup, migrasi profil guru,
+deployment rules/indexes, dan setup Android ada di [`../FIREBASE_SETUP.md`](../FIREBASE_SETUP.md).
+Riwayat perubahan lintas platform ada di [`../CHANGELOG.md`](../CHANGELOG.md).
 
 ### Publikasi di GitHub Pages
 

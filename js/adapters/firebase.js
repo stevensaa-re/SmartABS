@@ -54,7 +54,8 @@ const FirebaseAdapter = (() => {
       await loadScript(`${SDK_BASE}firebase-app-compat.js`);
       await Promise.all([
         loadScript(`${SDK_BASE}firebase-auth-compat.js`),
-        loadScript(`${SDK_BASE}firebase-firestore-compat.js`)
+        loadScript(`${SDK_BASE}firebase-firestore-compat.js`),
+        loadScript(`${SDK_BASE}firebase-functions-compat.js`)
       ]);
 
       if (!firebase.apps.length) firebase.initializeApp(APP_CONFIG.FIREBASE);
@@ -217,7 +218,6 @@ const FirebaseAdapter = (() => {
         if (error.code === 'auth/weak-password') throw new Error('Password terlalu lemah (minimal 6 karakter).');
         throw error;
       }
-      await sAuth.signOut();
 
       const profile = {
         name: payload.name,
@@ -228,7 +228,14 @@ const FirebaseAdapter = (() => {
         email: payload.email || ''
       };
 
-      await col('users').doc(credential.user.uid).set(profile);
+      try {
+        await col('users').doc(credential.user.uid).set(profile);
+      } catch (error) {
+        await credential.user.delete().catch(() => {});
+        throw error;
+      } finally {
+        await sAuth.signOut();
+      }
       return { id: credential.user.uid, ...profile };
     }),
 
@@ -239,7 +246,8 @@ const FirebaseAdapter = (() => {
 
       const current = snap.data();
 
-      if (payload.username && payload.username.trim().toLowerCase() !== current.usernameLower) {
+      const currentUsernameLower = String(current.usernameLower || current.username || '').trim().toLowerCase();
+      if (payload.username && payload.username.trim().toLowerCase() !== currentUsernameLower) {
         throw new Error('Username tidak dapat diubah pada mode Firebase (username terhubung ke akun login).');
       }
       if (payload.password) {
@@ -253,29 +261,18 @@ const FirebaseAdapter = (() => {
         email: payload.email ?? current.email
       };
 
-      await ref.update(changes);
+      const result = await firebase.functions().httpsCallable('updateManagedUser')({
+        uid: id,
+        ...changes,
+        password: payload.password || ''
+      });
+      if (!result.data || !result.data.ok) throw new Error('Perubahan akun tidak dikonfirmasi Firebase.');
       return { id, ...current, ...changes };
     }),
 
-    /* Catatan: menghapus akun login di Firebase Auth membutuhkan Admin SDK /
-       Cloud Function. Di sini hanya profil Firestore yang dihapus, sehingga
-       akun tersebut tidak dapat masuk lagi ke aplikasi. */
     deleteUser: (id) => run(async () => {
-      const ref = col('users').doc(id);
-      const snap = await ref.get();
-      if (!snap.exists) return true;
-      const { username } = snap.data();
-
-      const [students, teachers] = await Promise.all([
-        col('students').where('userId', '==', id).get(),
-        col('teachers').where('username', '==', username).get()
-      ]);
-
-      const ops = [(batch) => batch.delete(ref)];
-      students.docs.forEach((doc) => ops.push((batch) => batch.update(doc.ref, { userId: '' })));
-      teachers.docs.forEach((doc) => ops.push((batch) => batch.delete(doc.ref)));
-
-      await commitInChunks(ops);
+      const result = await firebase.functions().httpsCallable('deleteManagedUser')({ uid: id });
+      if (!result.data || !result.data.ok) throw new Error('Penghapusan akun tidak dikonfirmasi Firebase.');
       return true;
     }),
 
@@ -382,17 +379,21 @@ const FirebaseAdapter = (() => {
 
       if ((await ref.get()).exists) throw new Error('NIS sudah terdaftar.');
 
+      let userRef = null;
       if (payload.userId) {
         const linked = await col('students').where('userId', '==', payload.userId).limit(1).get();
         if (!linked.empty) throw new Error('Akun tersebut sudah terhubung dengan siswa lain.');
+        userRef = col('users').doc(payload.userId);
+        const user = await userRef.get();
+        if (!user.exists || user.data().role !== 'siswa') throw new Error('Akun yang dipilih bukan akun siswa yang valid.');
       }
 
       const { nis: _ignore, ...rest } = payload;
       const data = { userId: '', phone: '', gender: 'L', status: 'Aktif', ...rest };
-      await ref.set(data);
-
-      /* Simpan NIS pada profil akun agar rules bisa membatasi data milik siswa */
-      if (data.userId) await col('users').doc(data.userId).update({ nis });
+      const batch = db.batch();
+      batch.set(ref, data);
+      if (userRef) batch.update(userRef, { nis });
+      await batch.commit();
 
       return { nis, ...data };
     }),
@@ -410,14 +411,20 @@ const FirebaseAdapter = (() => {
         if (!linked.empty) throw new Error('Akun tersebut sudah terhubung dengan siswa lain.');
       }
 
-      await ref.update(rest);
-
-      if (rest.userId !== undefined && rest.userId !== current.userId) {
-        if (current.userId) {
-          await col('users').doc(current.userId).update({ nis: firebase.firestore.FieldValue.delete() }).catch(() => {});
-        }
-        if (rest.userId) await col('users').doc(rest.userId).update({ nis: String(nis) });
+      let nextUserRef = null;
+      if (rest.userId && rest.userId !== current.userId) {
+        nextUserRef = col('users').doc(rest.userId);
+        const user = await nextUserRef.get();
+        if (!user.exists || user.data().role !== 'siswa') throw new Error('Akun yang dipilih bukan akun siswa yang valid.');
       }
+
+      const batch = db.batch();
+      batch.update(ref, rest);
+      if (rest.userId !== undefined && rest.userId !== current.userId) {
+        if (current.userId) batch.update(col('users').doc(current.userId), { nis: firebase.firestore.FieldValue.delete() });
+        if (nextUserRef) batch.update(nextUserRef, { nis: String(nis) });
+      }
+      await batch.commit();
 
       return { nis: String(nis), ...current, ...rest };
     }),
@@ -430,12 +437,10 @@ const FirebaseAdapter = (() => {
 
       const batch = db.batch();
       batch.delete(ref);
-      await batch.commit();
-
       if (snap.data().userId) {
-        await col('users').doc(snap.data().userId)
-          .update({ nis: firebase.firestore.FieldValue.delete() }).catch(() => {});
+        batch.update(col('users').doc(snap.data().userId), { nis: firebase.firestore.FieldValue.delete() });
       }
+      await batch.commit();
       return true;
     }),
 
