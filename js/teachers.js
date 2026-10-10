@@ -113,8 +113,9 @@ function openTeacherForm(id = null) {
 
   const select = document.getElementById('teacherUsername');
   select.innerHTML = tersedia.length
-    ? tersedia.map((akun) => `<option value="${escapeHtml(akun.username)}">${escapeHtml(akun.name)} (${escapeHtml(akun.username)})</option>`).join('')
+    ? tersedia.map((akun) => `<option value="${escapeHtml(akun.username)}">${escapeHtml(akun.name)} (${escapeHtml(akun.email || akun.username)})</option>`).join('')
     : '<option value="">Tidak ada akun Guru yang tersedia</option>';
+  const labels = Object.fromEntries(daftarAkunGuru.map((akun) => [akun.username, `${akun.name} (${akun.email || akun.username})`]));
 
   if (guru) {
     select.value = guru.username;

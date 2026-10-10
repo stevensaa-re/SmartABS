@@ -140,6 +140,7 @@ const FirebaseAdapter = (() => {
 
   const loginEmail = (username) =>
     `${String(username).trim().toLowerCase()}@${APP_CONFIG.FIREBASE_LOGIN_DOMAIN}`;
+  const validEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || '').trim());
 
   /* Instance Firebase kedua, khusus untuk membuat akun baru tanpa
      mengeluarkan admin yang sedang login. */
@@ -167,9 +168,12 @@ const FirebaseAdapter = (() => {
     async login(username, password) {
       await init();
 
+      const loginInput = String(username).trim();
+      const credentialEmail = loginInput.includes('@') ? loginInput : loginEmail(loginInput);
       let credential;
       try {
-        credential = await auth.signInWithEmailAndPassword(loginEmail(username), password);
+          const login = String(username).trim();
+          credential = await auth.signInWithEmailAndPassword(login.includes('@') ? login : loginEmail(login), password);
       } catch (error) {
         if (AUTH_FAIL_CODES.includes(error.code)) return { ok: false, message: 'Username atau password salah.' };
         if (error.code === 'auth/too-many-requests') {
@@ -193,10 +197,9 @@ const FirebaseAdapter = (() => {
         await auth.signOut();
         return { ok: false, message: 'Akun Anda tidak aktif. Hubungi administrator.' };
       }
-
       return {
         ok: true,
-        user: { id: snap.id, name: profile.name, username: profile.username, role: profile.role }
+        user: { id: snap.id, name: profile.name, username: profile.username, email: credential.user.email, role: profile.role }
       };
     },
 
@@ -212,6 +215,9 @@ const FirebaseAdapter = (() => {
     createUser: (payload) => run(async () => {
       const username = String(payload.username).trim();
       const usernameLower = username.toLowerCase();
+      const email = String(payload.email || '').trim().toLowerCase();
+
+      if (!validEmail(email)) throw new Error('Email login wajib diisi dengan format email yang valid.');
 
       const exists = await col('users').where('usernameLower', '==', usernameLower).limit(1).get();
       if (!exists.empty) throw new Error('Username sudah digunakan.');
@@ -219,7 +225,7 @@ const FirebaseAdapter = (() => {
       const sAuth = secondaryAuth();
       let credential;
       try {
-        credential = await sAuth.createUserWithEmailAndPassword(loginEmail(username), payload.password);
+        credential = await sAuth.createUserWithEmailAndPassword(email, payload.password);
       } catch (error) {
         if (error.code === 'auth/email-already-in-use') throw new Error('Username sudah digunakan.');
         if (error.code === 'auth/weak-password') throw new Error('Password terlalu lemah (minimal 6 karakter).');
@@ -232,7 +238,7 @@ const FirebaseAdapter = (() => {
         usernameLower,
         role: payload.role,
         status: payload.status || 'Aktif',
-        email: payload.email || ''
+        email
       };
 
       try {
@@ -257,6 +263,9 @@ const FirebaseAdapter = (() => {
       if (payload.username && payload.username.trim().toLowerCase() !== currentUsernameLower) {
         throw new Error('Username tidak dapat diubah pada mode Firebase (username terhubung ke akun login).');
       }
+      if (payload.email && payload.email.trim().toLowerCase() !== String(current.email || '').trim().toLowerCase()) {
+        throw new Error('Email login tidak dapat diganti dari form admin. Pengguna dapat menggantinya lewat Firebase Authentication dengan verifikasi email.');
+      }
       if (payload.password) {
         throw new Error('Password pengguna lain diubah lewat Firebase Console atau Cloud Function. Kosongkan kolom password.');
       }
@@ -265,7 +274,7 @@ const FirebaseAdapter = (() => {
         name: payload.name ?? current.name,
         role: payload.role ?? current.role,
         status: payload.status ?? current.status,
-        email: payload.email ?? current.email
+        email: current.email || loginEmail(current.username)
       };
 
       if (changes.role !== current.role) {
@@ -282,7 +291,13 @@ const FirebaseAdapter = (() => {
         throw new Error('Anda tidak dapat menonaktifkan atau mengubah role akun yang sedang digunakan.');
       }
       if (payload.passwordReset) {
-        await auth.sendPasswordResetEmail(loginEmail(current.username));
+        const storedEmail = String(current.email || '').trim();
+        try {
+          await auth.sendPasswordResetEmail(storedEmail || loginEmail(current.username));
+        } catch (error) {
+          if (!storedEmail || storedEmail.toLowerCase() === loginEmail(current.username).toLowerCase()) throw error;
+          await auth.sendPasswordResetEmail(loginEmail(current.username));
+        }
       }
       await ref.update(changes);
       return { id, ...current, ...changes };
@@ -624,7 +639,25 @@ const FirebaseAdapter = (() => {
     }),
 
     saveAttendance: (payload) => run(async () => {
+      const firebaseUser = auth.currentUser;
+      if (!firebaseUser) throw new Error('Sesi Firebase berakhir. Silakan login kembali.');
+      const userProfile = await col('users').doc(firebaseUser.uid).get();
+      if (!userProfile.exists || userProfile.data().status !== 'Aktif') {
+        throw new Error('Profil akun tidak aktif atau tidak ditemukan.');
+      }
+      const date = String(payload.date || '');
+      const status = String(payload.status || '');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Tanggal absensi tidak valid.');
+      if (!['Hadir', 'Izin', 'Sakit', 'Alpa'].includes(status)) throw new Error('Status absensi tidak valid.');
       const student = await getStudentDoc(payload.studentId);
+      if (student.status !== 'Aktif') throw new Error('Siswa tidak aktif.');
+      if (!student.className) throw new Error('Siswa belum terhubung ke kelas.');
+      const isStudentSelfCheckIn = userProfile.data().role === 'siswa';
+      if (isStudentSelfCheckIn) {
+        if (userProfile.data().nis !== student.nis || status !== 'Hadir' || date !== todayISO()) {
+          throw new Error('Siswa hanya dapat mencatat kehadiran untuk dirinya sendiri pada hari ini.');
+        }
+      }
       const id = `${payload.date}_${student.nis}`;
 
       const data = {
@@ -633,10 +666,18 @@ const FirebaseAdapter = (() => {
         ...payload,
         studentId: student.nis,
         name: student.name,
-        className: student.className
+        className: student.className,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
       };
 
-      await col('attendance').doc(id).set(data, { merge: true });
+      const ref = col('attendance').doc(id);
+      await db.runTransaction(async (transaction) => {
+        const current = await transaction.get(ref);
+        if (isStudentSelfCheckIn && current.exists) {
+          throw new Error('Anda sudah melakukan absensi hari ini.');
+        }
+        transaction.set(ref, data, { merge: !isStudentSelfCheckIn });
+      });
       return { id, ...data };
     }),
 
@@ -704,6 +745,7 @@ const FirebaseAdapter = (() => {
           date: item.date,
           time: '-',
           status: status === 'Disetujui' ? item.type : 'Alpa',
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
           note: status === 'Disetujui'
             ? (item.note || item.type)
             : `Pengajuan ditolak${item.note ? `: ${item.note}` : ''}`

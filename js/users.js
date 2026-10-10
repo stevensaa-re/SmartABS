@@ -99,6 +99,12 @@ function openUserForm(id = null) {
   document.getElementById('userPassword').classList.toggle('hidden', !!id && firebaseBackend);
   document.getElementById('userPasswordReq').classList.toggle('hidden', !!id);
   document.getElementById('resetUserPasswordBtn').classList.toggle('hidden', !id || !firebaseBackend);
+  document.getElementById('userEmailReq').classList.toggle('hidden', !!id || !firebaseBackend);
+  document.getElementById('userEmail').required = !id && firebaseBackend;
+  document.getElementById('userEmail').readOnly = !!id && firebaseBackend;
+  document.getElementById('userEmailHelp').textContent = firebaseBackend
+    ? (id ? 'Email login terikat ke Firebase Authentication.' : 'Email ini dipakai langsung untuk login ke SMARTABS.')
+    : 'Email kontak pengguna.';
 
   if (id) {
     const user = daftarPengguna.find((item) => item.id === id);
@@ -151,6 +157,10 @@ async function simpanUser(event) {
     Toast.warning('Format email tidak valid.');
     valid = false;
   }
+  if (!id && APP_CONFIG.BACKEND === 'firebase' && !email) {
+    document.getElementById('userEmailHelp').textContent = 'Email login wajib diisi pada Firebase.';
+    valid = false;
+  }
   if (!valid) return;
 
   const button = document.getElementById('saveUserBtn');
@@ -190,7 +200,7 @@ async function kirimResetPassword() {
   button.disabled = true;
   try {
     await API.updateUser(id, { passwordReset: true });
-    Toast.success(`Tautan reset dikirim ke email login ${user.username}@${APP_CONFIG.FIREBASE_LOGIN_DOMAIN}.`);
+    Toast.success(`Tautan reset dikirim ke ${user.email || `${user.username}@${APP_CONFIG.FIREBASE_LOGIN_DOMAIN}`}.`);
   } catch (error) {
     Toast.error(error.message || 'Gagal mengirim tautan reset password.');
   } finally {

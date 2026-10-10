@@ -53,8 +53,9 @@ MYSQL: { API_URL: 'http://localhost:3000/api' }
    `status: "Aktif"`, dan `email`. Gunakan UID dari Authentication sebagai ID dokumen.
    Setelah login, admin dapat mengelola data dari aplikasi.
 
-Login memakai username yang diubah menjadi email dengan domain `FIREBASE_LOGIN_DOMAIN`
-di `js/config.js` (misalnya username `admin` menjadi `admin@gmail.com`).
+Login akun baru memakai email yang dimasukkan admin pada **Data Pengguna**. Untuk kompatibilitas,
+akun lama tetap dapat login memakai username yang dipetakan ke domain `FIREBASE_LOGIN_DOMAIN`
+di `js/config.js` sampai email Auth-nya disejajarkan.
 
 Panduan lengkap untuk setup project yang sudah berisi data, backup, migrasi profil guru,
 deployment rules/indexes, dan setup Android ada di [`../FIREBASE_SETUP.md`](../FIREBASE_SETUP.md).

@@ -83,9 +83,9 @@ function isiPilihanAkun(nisSaatIni = null) {
 
   document.getElementById('studentUser').innerHTML =
     '<option value="">— Belum dihubungkan —</option>' +
-    daftarAkunSiswa
-      .filter((akun) => !dipakai.has(akun.id))
-      .map((akun) => `<option value="${escapeHtml(akun.id)}">${escapeHtml(akun.name)} (${escapeHtml(akun.username)})</option>`)
+      daftarAkunSiswa
+        .filter((akun) => !dipakai.has(akun.id))
+        .map((akun) => `<option value="${escapeHtml(akun.id)}">${escapeHtml(akun.name)} (${escapeHtml(akun.email || akun.username)})</option>`)
       .join('');
 }
 

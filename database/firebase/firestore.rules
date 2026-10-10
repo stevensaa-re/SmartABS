@@ -96,11 +96,13 @@ service cloud.firestore {
 
       allow create: if (isAdmin() || teaches(request.resource.data.className))
         && request.resource.data.status in ['Hadir', 'Izin', 'Sakit', 'Alpa']
+        && request.resource.data.createdAt == request.time
         && id == request.resource.data.date + '_' + request.resource.data.studentId
         && (isAdmin() || enrolledIn(request.resource.data.studentId, request.resource.data.className));
       allow update: if isAdmin() || (teaches(resource.data.className)
         && teaches(request.resource.data.className)
         && request.resource.data.status in ['Hadir', 'Izin', 'Sakit', 'Alpa']
+        && request.resource.data.createdAt == request.time
         && request.resource.data.studentId == resource.data.studentId
         && request.resource.data.date == resource.data.date
         && id == request.resource.data.date + '_' + request.resource.data.studentId
@@ -113,8 +115,9 @@ service cloud.firestore {
       // tidak bisa dicocokkan secara andal di sini. Batas tanggal & jam server yang ketat
       // hanya tersedia pada mode MySQL (atau tambahkan Cloud Function untuk absen mandiri).
       allow create: if isSiswa()
-        && request.resource.data.keys().hasAll(['studentId', 'name', 'className', 'date', 'time', 'status', 'note'])
-        && request.resource.data.keys().hasOnly(['studentId', 'name', 'className', 'date', 'time', 'status', 'note'])
+        && request.resource.data.keys().hasAll(['studentId', 'name', 'className', 'date', 'time', 'status', 'note', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['studentId', 'name', 'className', 'date', 'time', 'status', 'note', 'createdAt'])
+        && request.resource.data.createdAt == request.time
         && request.resource.data.studentId == myNis()
         && exists(/databases/$(database)/documents/students/$(myNis()))
         && request.resource.data.name == get(/databases/$(database)/documents/students/$(myNis())).data.name

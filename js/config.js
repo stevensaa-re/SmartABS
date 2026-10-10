@@ -32,8 +32,8 @@ const APP_CONFIG = {
     measurementId: 'G-N3RJBY96W0'
   },
 
-  /* Firebase Auth butuh email. Username diubah menjadi
-     "<username>@<domain ini>" saat login. */
+    /* Akun lama dapat login dengan username yang dipetakan ke domain ini.
+      Akun baru memakai email Firebase Auth yang diinput saat dibuat. */
   FIREBASE_LOGIN_DOMAIN: 'gmail.com',
 
   /* ---------- Sesi ---------- */

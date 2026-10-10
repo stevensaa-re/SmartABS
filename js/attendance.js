@@ -222,16 +222,15 @@ async function initAbsensiSiswa() {
     button.disabled = true;
     button.innerHTML = '<span class="spinner spinner-sm"></span> Memproses...';
 
-    /* Validasi ulang: pastikan belum absen hari ini */
-    const cek = await API.getAttendanceByStudentDate(student.nis, today);
-
-    if (cek) {
-      Toast.warning('Anda sudah melakukan absensi hari ini.');
-      button.innerHTML = '<i class="fa-solid fa-check"></i> SUDAH ABSEN';
-      return;
-    }
-
     try {
+      /* Fast feedback only; the Firestore transaction is the authoritative duplicate guard. */
+      const cek = await API.getAttendanceByStudentDate(student.nis, today);
+      if (cek) {
+        Toast.warning('Anda sudah melakukan absensi hari ini.');
+        button.innerHTML = '<i class="fa-solid fa-check"></i> SUDAH ABSEN';
+        return;
+      }
+
       const record = await API.saveAttendance({
         studentId: student.nis,
         name: student.name,
@@ -257,7 +256,7 @@ async function initAbsensiSiswa() {
       Toast.success('Absensi berhasil!', 'Kehadiran Anda tercatat.');
 
     } catch (error) {
-      Toast.error('Absensi gagal. Silakan coba lagi.');
+      Toast.error(error.message || 'Absensi gagal. Silakan coba lagi.');
       button.disabled = false;
       button.innerHTML = '<i class="fa-solid fa-fingerprint"></i> ABSEN SEKARANG';
     }
