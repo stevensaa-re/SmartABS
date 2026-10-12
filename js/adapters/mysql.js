@@ -140,8 +140,16 @@ const MysqlAdapter = (() => {
     getAttendanceByDate:        (date, className = null)     => get(`/attendance/date/${enc(date)}${query({ className })}`),
     getAttendanceByStudent:     (nis)                        => get(`/attendance/student/${enc(nis)}`),
     getAttendanceByStudentDate: (nis, date)                  => get(`/attendance/student/${enc(nis)}/date/${enc(date)}`),
+    getAttendanceForStudentDate: async (nis, date) => {
+      const record = await get(`/attendance/student/${enc(nis)}/date/${enc(date)}`);
+      return record ? [record] : [];
+    },
     saveAttendance:             (payload)                    => post('/attendance', payload),
     deleteAttendance:           (id)                         => del(`/attendance/${enc(id)}`).then(() => true),
+    startAttendanceSession:     async () => { throw new Error('Sesi QR per mata pelajaran memerlukan backend Firebase.'); },
+    rotateAttendanceSession:    async () => { throw new Error('Sesi QR per mata pelajaran memerlukan backend Firebase.'); },
+    closeAttendanceSession:     async () => { throw new Error('Sesi QR per mata pelajaran memerlukan backend Firebase.'); },
+    submitQrAttendance:         async () => { throw new Error('Absensi QR per mata pelajaran memerlukan backend Firebase.'); },
 
     /* ---------------- PERMISSIONS ---------------- */
 

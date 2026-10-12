@@ -53,6 +53,19 @@ MYSQL: { API_URL: 'http://localhost:3000/api' }
    `status: "Aktif"`, dan `email`. Gunakan UID dari Authentication sebagai ID dokumen.
    Setelah login, admin dapat mengelola data dari aplikasi.
 
+### Absensi QR per mata pelajaran (gratis)
+
+Gunakan `BACKEND: 'firebase'` di website serta Firestore Rules/indexes terbaru. Guru membuka
+**Absensi**, memilih jadwal, lalu menampilkan QR untuk siswa. Siswa memindai QR dari halaman
+Absensi; Android dan website memakai sesi Firestore yang sama. Token QR berubah tiap 20 detik,
+berlaku 30 detik, dan setiap akun siswa hanya dapat mencatat satu kehadiran untuk satu sesi.
+Jam ponsel siswa tidak dipakai untuk memvalidasi masa berlaku token.
+
+Fitur ini menggunakan Firebase Spark tanpa Cloud Functions atau layanan berbayar. Kamera
+website memerlukan HTTPS (atau localhost) dan izin kamera. QR dinamis mengurangi titip absen,
+tetapi tidak dapat mencegah QR aktif difoto/dibagikan dalam jendela singkat atau membuktikan
+lokasi fisik siswa tanpa backend tepercaya/pemeriksaan guru.
+
 Login akun baru memakai email yang dimasukkan admin pada **Data Pengguna**. Untuk kompatibilitas,
 akun lama tetap dapat login memakai username yang dipetakan ke domain `FIREBASE_LOGIN_DOMAIN`
 di `js/config.js` sampai email Auth-nya disejajarkan.

@@ -30,6 +30,26 @@
         </div>
       </div>
 
+      <section class="card qr-session-card">
+        <div>
+          <h2>Absensi QR per Mata Pelajaran</h2>
+          <p class="text-muted">Mulai sesi saat siswa sudah berada di kelas. QR berganti otomatis setiap 20 detik.</p>
+        </div>
+        <div class="filter-group qr-session-controls">
+          <select id="qrSchedule" class="form-control" aria-label="Jadwal mata pelajaran"></select>
+          <button class="btn btn-primary" id="btnStartQr"><i class="fa-solid fa-qrcode"></i> Mulai Sesi</button>
+        </div>
+        <div id="qrSessionPanel" class="qr-session-panel hidden">
+          <div id="attendanceQrCode" class="attendance-qr-code" aria-label="Kode QR absensi"></div>
+          <div>
+            <strong id="qrSessionSubject"></strong>
+            <p id="qrSessionInfo" class="text-muted"></p>
+            <p id="qrSessionCountdown" class="qr-countdown"></p>
+            <button class="btn btn-outline" id="btnCloseQr">Tutup Sesi</button>
+          </div>
+        </div>
+      </section>
+
       <section class="card">
         <div class="table-toolbar">
           <div class="filter-group">
@@ -109,6 +129,7 @@
 <script src="../js/api.js"></script>
 <script src="../js/notifications.js"></script>
 <script src="../js/app.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script src="../js/attendance.js"></script>
 </body>
 </html>

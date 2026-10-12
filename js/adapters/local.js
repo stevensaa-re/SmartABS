@@ -454,6 +454,26 @@ const LocalAdapter = (() => {
       ) || null;
     },
 
+    async getAttendanceForStudentDate(nis, date) {
+      await delay();
+      return readTable('attendance').filter(
+        (row) => row.studentId === String(nis) && row.date === date
+      );
+    },
+
+    async startAttendanceSession() {
+      throw new Error('Sesi QR per mata pelajaran memerlukan backend Firebase.');
+    },
+    async rotateAttendanceSession() {
+      throw new Error('Sesi QR per mata pelajaran memerlukan backend Firebase.');
+    },
+    async closeAttendanceSession() {
+      throw new Error('Sesi QR per mata pelajaran memerlukan backend Firebase.');
+    },
+    async submitQrAttendance() {
+      throw new Error('Absensi QR per mata pelajaran memerlukan backend Firebase.');
+    },
+
     /* Simpan absensi (baru atau perbarui jika siswa+tanggal sudah ada) */
     async saveAttendance(payload) {
       await delay();

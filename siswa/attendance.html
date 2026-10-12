@@ -26,24 +26,27 @@
       <div class="page-head">
         <div>
           <h1>Absensi Hari Ini</h1>
-          <p>Lakukan absensi kehadiran Anda sebelum jam pelajaran dimulai.</p>
+          <p>Pindai QR yang ditampilkan guru di kelas untuk mencatat kehadiran pada mata pelajaran yang sedang berlangsung.</p>
         </div>
       </div>
 
       <section class="attendance-panel" id="attendancePanel">
         <div class="attendance-icon" id="attendanceIcon">
-          <i class="fa-solid fa-fingerprint"></i>
+          <i class="fa-solid fa-qrcode"></i>
         </div>
 
-        <h2 id="attendanceTitle">Konfirmasi Kehadiran</h2>
-        <p class="text-muted" id="attendanceSubtitle">Tekan tombol di bawah untuk mencatat kehadiran Anda.</p>
+        <h2 id="attendanceTitle">Absensi per Mata Pelajaran</h2>
+        <p class="text-muted" id="attendanceSubtitle">QR hanya berlaku singkat dan hanya dapat digunakan sekali oleh akun Anda.</p>
 
         <div class="attendance-info" id="attendanceInfo"></div>
 
         <div class="attendance-status hidden" id="attendanceStatusBox"></div>
+        <div id="todaySubjectAttendance" class="subject-attendance-list"></div>
+        <div id="qrScanner" class="qr-scanner hidden"></div>
+        <p id="qrScanMessage" class="text-muted" role="status"></p>
 
         <button class="btn btn-primary btn-lg" id="btnAbsen">
-          <i class="fa-solid fa-fingerprint"></i> ABSEN SEKARANG
+          <i class="fa-solid fa-camera"></i> PINDAI QR MATA PELAJARAN
         </button>
       </section>
     </main>
@@ -57,6 +60,7 @@
 <script src="../js/api.js"></script>
 <script src="../js/notifications.js"></script>
 <script src="../js/app.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="../js/attendance.js"></script>
 </body>
 </html>

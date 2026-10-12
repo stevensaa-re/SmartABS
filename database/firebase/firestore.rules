@@ -45,6 +45,35 @@ service cloud.firestore {
         ? get(/databases/$(database)/documents/students/$(myNis())).data.className
         : '';
     }
+    function qrSession(sessionId) {
+      return get(/databases/$(database)/documents/attendanceSessions/$(sessionId)).data;
+    }
+    function validQrAttendance(id) {
+      return isSiswa()
+        && request.resource.data.keys().hasAll([
+          'sessionId', 'sessionToken', 'scheduleId', 'subject', 'studentId',
+          'name', 'className', 'date', 'time', 'status', 'note', 'createdAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'sessionId', 'sessionToken', 'scheduleId', 'subject', 'studentId',
+          'name', 'className', 'date', 'time', 'status', 'note', 'createdAt'
+        ])
+        && exists(/databases/$(database)/documents/attendanceSessions/$(request.resource.data.sessionId))
+        && qrSession(request.resource.data.sessionId).active == true
+        && qrSession(request.resource.data.sessionId).expiresAt > request.time
+        && qrSession(request.resource.data.sessionId).token == request.resource.data.sessionToken
+        && qrSession(request.resource.data.sessionId).scheduleId == request.resource.data.scheduleId
+        && qrSession(request.resource.data.sessionId).subject == request.resource.data.subject
+        && qrSession(request.resource.data.sessionId).className == request.resource.data.className
+        && qrSession(request.resource.data.sessionId).date == request.resource.data.date
+        && request.resource.data.studentId == myNis()
+        && request.resource.data.className == myClassName()
+        && request.resource.data.name == get(/databases/$(database)/documents/students/$(myNis())).data.name
+        && request.resource.data.status == 'Hadir'
+        && request.resource.data.time == request.time
+        && request.resource.data.createdAt == request.time
+        && id == request.resource.data.sessionId + '_' + myNis();
+    }
 
     // ---------- users ----------
     // Pengguna boleh membaca profilnya sendiri; admin mengelola semuanya.
@@ -89,10 +118,11 @@ service cloud.firestore {
     }
 
     // ---------- absensi ----------
-    // Dokumen berid "{tanggal}_{nis}" sehingga satu siswa = satu baris per hari.
+    // Catatan lama memakai "{tanggal}_{nis}"; absensi QR memakai "{sesi}_{nis}".
     match /attendance/{id} {
       allow read: if isAdmin() || teaches(resource.data.className)
-        || (isSiswa() && resource.data.studentId == myNis());
+        || (isSiswa() && (resource.data.studentId == myNis()
+          || id.matches('.*_' + myNis())));
 
       allow create: if (isAdmin() || teaches(request.resource.data.className))
         && request.resource.data.status in ['Hadir', 'Izin', 'Sakit', 'Alpa']
@@ -109,21 +139,49 @@ service cloud.firestore {
         && enrolledIn(request.resource.data.studentId, request.resource.data.className));
       allow delete: if isAdmin() || teaches(resource.data.className);
 
-      // Siswa: hanya membuat absensi "Hadir" untuk dirinya sendiri, SEKALI (create saja,
-      // tanpa update/delete), dengan id dokumen "{tanggal}_{nis}".
-      // CATATAN: Firestore Rules memakai UTC, sehingga tanggal "hari ini" menurut WIB
-      // tidak bisa dicocokkan secara andal di sini. Batas tanggal & jam server yang ketat
-      // hanya tersedia pada mode MySQL (atau tambahkan Cloud Function untuk absen mandiri).
-      allow create: if isSiswa()
-        && request.resource.data.keys().hasAll(['studentId', 'name', 'className', 'date', 'time', 'status', 'note', 'createdAt'])
-        && request.resource.data.keys().hasOnly(['studentId', 'name', 'className', 'date', 'time', 'status', 'note', 'createdAt'])
+      // Absensi QR: satu dokumen per siswa per sesi, divalidasi terhadap token
+      // aktif di server Rules menggunakan request.time, bukan jam perangkat siswa.
+      allow create: if validQrAttendance(id);
+    }
+
+    // ---------- sesi QR absensi ----------
+    match /attendanceSessions/{id} {
+      allow read: if isAdmin()
+        || (isGuru() && resource.data.className == assignedClass()
+          && resource.data.teacherUid == request.auth.uid);
+      allow create: if (isAdmin() || (isGuru() && request.resource.data.className == assignedClass()))
+        && request.resource.data.keys().hasAll([
+          'scheduleId', 'subject', 'className', 'date', 'teacherUid', 'teacherName',
+          'token', 'active', 'expiresAt', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'scheduleId', 'subject', 'className', 'date', 'teacherUid', 'teacherName',
+          'token', 'active', 'expiresAt', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.teacherUid == request.auth.uid
+        && request.resource.data.subject is string
+        && request.resource.data.subject.size() > 0
         && request.resource.data.createdAt == request.time
-        && request.resource.data.studentId == myNis()
-        && exists(/databases/$(database)/documents/students/$(myNis()))
-        && request.resource.data.name == get(/databases/$(database)/documents/students/$(myNis())).data.name
-        && request.resource.data.className == get(/databases/$(database)/documents/students/$(myNis())).data.className
-        && request.resource.data.status == 'Hadir'
-        && id == request.resource.data.date + '_' + myNis();
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.active == false
+        && exists(/databases/$(database)/documents/schedules/$(request.resource.data.scheduleId))
+        && get(/databases/$(database)/documents/schedules/$(request.resource.data.scheduleId)).data.className == request.resource.data.className
+        && get(/databases/$(database)/documents/schedules/$(request.resource.data.scheduleId)).data.subject == request.resource.data.subject
+        && get(/databases/$(database)/documents/schedules/$(request.resource.data.scheduleId)).data.teacher == request.resource.data.teacherName
+        && (isAdmin() || request.resource.data.teacherName == me().name);
+      allow update: if isAdmin()
+        || (isGuru()
+          && resource.data.teacherUid == request.auth.uid
+          && resource.data.className == assignedClass()
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['token', 'expiresAt', 'updatedAt', 'active', 'closedAt'])
+          && request.resource.data.updatedAt == request.time
+          && (request.resource.data.active == false
+            || (request.resource.data.token is string
+              && request.resource.data.token.size() == 32
+              && request.resource.data.expiresAt > request.time
+              && request.resource.data.expiresAt <= request.time + duration.value(35, 's'))));
+      allow delete: if isAdmin();
     }
 
     // ---------- izin / sakit ----------

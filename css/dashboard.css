@@ -38,6 +38,33 @@
 .chart-box { position: relative; height: 280px; }
 .chart-box canvas { max-width: 100%; }
 
+.qr-session-card {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.qr-session-controls { display: flex; gap: 10px; }
+.qr-session-controls select { min-width: 240px; }
+.qr-session-panel {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.attendance-qr-code { padding: 8px; background: #fff; border-radius: 8px; }
+.qr-countdown { font-weight: 700; color: var(--primary); }
+.qr-scanner { width: min(100%, 420px); margin: 16px auto; }
+.subject-attendance-list { width: min(100%, 460px); margin: 16px auto 0; text-align: left; }
+.subject-attendance-list > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
 /* Fallback grafik CSS (jika Chart.js gagal dimuat) */
 .css-chart { display: flex; flex-direction: column; gap: 12px; padding: 6px 0; }
 .css-chart-row { display: grid; grid-template-columns: 60px 1fr 36px; align-items: center; gap: 10px; font-size: 13px; }
@@ -45,6 +72,11 @@
 .css-chart-track { height: 12px; background: #e2e8f0; border-radius: 999px; overflow: hidden; }
 .css-chart-bar { height: 100%; border-radius: 999px; }
 .css-chart-value { font-weight: 700; text-align: right; }
+
+@media (max-width: 600px) {
+  .qr-session-controls,
+  .qr-session-panel { flex-direction: column; align-items: stretch; }
+}
 
 /* Profil siswa */
 .profile-card {

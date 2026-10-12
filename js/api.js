@@ -30,6 +30,9 @@ const API_CONTRACT = [
   /* attendance */
   'getAttendanceRange', 'getAttendanceByDate', 'getAttendanceByStudent',
   'getAttendanceByStudentDate', 'saveAttendance', 'deleteAttendance',
+  'getAttendanceForStudentDate',
+  'startAttendanceSession', 'rotateAttendanceSession', 'closeAttendanceSession',
+  'submitQrAttendance',
   /* permissions */
   'getPermissions', 'getPermissionsByStudent', 'createPermission', 'reviewPermission',
   /* reports */
