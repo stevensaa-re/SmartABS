@@ -158,8 +158,8 @@ service cloud.firestore {
     // Catatan lama memakai "{tanggal}_{nis}"; absensi QR memakai "{sesi}_{nis}".
     match /attendance/{id} {
       allow read: if isAdmin() || teaches(resource.data.className)
-        || (isSiswa() && (resource.data.studentId == myNis()
-          || id.matches('.*_' + myNis())));
+        || (isSiswa() && myNis() != '' && id.matches('.*_' + myNis() + '$'))
+        || (isSiswa() && resource.data.studentId == myNis());
 
       allow create: if validManualAttendance(id) || validQrAttendance(id);
       allow update: if validManualAttendance(id)
@@ -201,10 +201,8 @@ service cloud.firestore {
 
     // ---------- sesi QR absensi ----------
     match /attendanceSessions/{id} {
-      allow read: if isAdmin()
-        || (isGuru() && resource.data.className == assignedClass()
-          && resource.data.teacherUid == request.auth.uid);
-      allow create: if (isAdmin() || (isGuru() && request.resource.data.className == assignedClass()))
+      allow read: if isAdmin() || (isGuru() && resource.data.teacherUid == request.auth.uid);
+      allow create: if (isAdmin() || isGuru())
         && request.resource.data.keys().hasAll([
           'scheduleId', 'subject', 'className', 'date', 'teacherUid', 'teacherName',
           'token', 'previousToken', 'active', 'expiresAt', 'createdAt', 'updatedAt'
@@ -221,23 +219,24 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time
         && request.resource.data.active == false
         && exists(/databases/$(database)/documents/schedules/$(request.resource.data.scheduleId))
-        && get(/databases/$(database)/documents/schedules/$(request.resource.data.scheduleId)).data.className == request.resource.data.className
-        && get(/databases/$(database)/documents/schedules/$(request.resource.data.scheduleId)).data.subject == request.resource.data.subject
-        && get(/databases/$(database)/documents/schedules/$(request.resource.data.scheduleId)).data.teacher == request.resource.data.teacherName
-        && (isAdmin() || request.resource.data.teacherName == me().name);
+        && get(/databases/$(database)/documents/schedules/$(request.resource.data.scheduleId)).data.className
+          == request.resource.data.className
+        && get(/databases/$(database)/documents/schedules/$(request.resource.data.scheduleId)).data.subject
+          == request.resource.data.subject
+        && (isAdmin() || (teaches(request.resource.data.className)
+          && get(/databases/$(database)/documents/schedules/$(request.resource.data.scheduleId)).data.teacher
+            == me().name));
       allow update: if isAdmin()
         || (isGuru()
           && resource.data.teacherUid == request.auth.uid
-          && resource.data.className == assignedClass()
           && request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['token', 'previousToken', 'expiresAt', 'updatedAt', 'active', 'closedAt'])
           && request.resource.data.updatedAt == request.time
           && (request.resource.data.active == false
             || (request.resource.data.token is string
               && request.resource.data.token.size() == 32
-              && request.resource.data.expiresAt > request.time
-              && request.resource.data.expiresAt <= request.time + duration.value(60, 's'))));
-      allow delete: if isAdmin();
+              && request.resource.data.expiresAt > request.time)));
+      allow delete: if isAdmin() || isGuru();
     }
 
     // ---------- izin / sakit ----------

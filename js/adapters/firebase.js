@@ -826,19 +826,15 @@ const FirebaseAdapter = (() => {
       if (scheduleData.className !== payload.className || scheduleData.subject !== payload.subject) {
         throw new Error('Jadwal dan kelas tidak cocok.');
       }
-      if (profile.role === 'guru' &&
-          (profile.className !== scheduleData.className || profile.name !== scheduleData.teacher)) {
-        throw new Error('Guru hanya dapat membuka sesi untuk kelas dan mata pelajaran yang ditugaskan.');
-      }
 
       const date = String(payload.date || todayISO());
       let activeSessions = col('attendanceSessions')
         .where('scheduleId', '==', schedule.id)
         .where('date', '==', date)
-        .where('active', '==', true);
+        .where('active', '==', true)
+        .where('className', '==', scheduleData.className);
       if (profile.role === 'guru') {
         activeSessions = activeSessions
-          .where('className', '==', scheduleData.className)
           .where('teacherUid', '==', firebaseUser.uid);
       }
       const activeSnapshot = await activeSessions.get();
@@ -866,11 +862,6 @@ const FirebaseAdapter = (() => {
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       });
-      await ref.update({
-        active: true,
-        expiresAt: firebase.firestore.Timestamp.fromMillis(now + 30_000),
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
       const updated = await ref.get();
       const serverTime = updated.get('createdAt');
       if (!serverTime) throw new Error('Waktu server Firebase belum tersedia. Coba buka sesi lagi.');
@@ -878,7 +869,9 @@ const FirebaseAdapter = (() => {
       sessionClockOffsets.set(ref.id, serverOffset);
       const expiresAt = Date.now() + serverOffset + 30_000;
       await ref.update({
-        expiresAt: firebase.firestore.Timestamp.fromMillis(expiresAt)
+        active: true,
+        expiresAt: firebase.firestore.Timestamp.fromMillis(expiresAt),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       });
       return {
         id: ref.id,
