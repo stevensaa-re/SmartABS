@@ -33,9 +33,12 @@
   align-items: end;
 }
 .filter-bar .form-group { margin: 0; }
+.report-semester-hint { grid-column: 1 / -1; }
 
 /* Chip filter (jadwal siswa) */
 .chip-filter { display: flex; gap: 8px; flex-wrap: wrap; }
+.schedule-day-filter { flex-wrap: nowrap; overflow-x: auto; max-width: 100%; padding: 2px 0 6px; }
+.schedule-day-filter .chip { flex: 0 0 auto; }
 .chip {
   border: 1px solid var(--border);
   background: var(--surface);
@@ -74,6 +77,24 @@
 }
 .data-table tbody tr:last-child td { border-bottom: none; }
 .data-table tbody tr:hover { background: #f8fafc; }
+.data-table tbody tr.schedule-day-heading:hover { background: #eff6ff; }
+.data-table tbody tr.schedule-day-heading td {
+  padding: 11px 18px;
+  background: #eff6ff;
+  color: var(--primary-dark);
+  font-size: 13px;
+  font-weight: 700;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.schedule-day-count {
+  float: right;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.schedule-time { white-space: nowrap; }
+.schedule-attendance-link { white-space: nowrap; font-size: 12px; padding: 7px 10px; }
 .data-table tfoot td {
   padding: 13px 18px;
   background: #f8fafc;

@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   /* Default periode: 14 hari terakhir */
   document.getElementById('reportFrom').value = shiftDate(-14);
   document.getElementById('reportTo').value = todayISO();
+  initializeSemesterFilters();
 
   kelasTersedia = await API.getClasses();
   jadwalLaporan = await API.getSchedules();
@@ -32,6 +33,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   document.getElementById('reportClass').addEventListener('change', updateReportSubjects);
+  document.getElementById('reportFrom').addEventListener('change', clearSemesterPreset);
+  document.getElementById('reportTo').addEventListener('change', clearSemesterPreset);
   updateReportSubjects();
   document.getElementById('btnFilterReport').addEventListener('click', muatLaporan);
   document.getElementById('btnExportCsv').addEventListener('click', exportCsv);
@@ -39,6 +42,36 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   await muatLaporan();
 });
+
+function initializeSemesterFilters() {
+  const yearSelect = document.getElementById('reportAcademicYear');
+  const today = new Date();
+  const currentStartYear = today.getMonth() >= 6 ? today.getFullYear() : today.getFullYear() - 1;
+  yearSelect.innerHTML = '<option value="">Pilih tahun ajaran</option>' +
+    Array.from({ length: 6 }, (_, index) => currentStartYear + 1 - index)
+      .map((year) => `<option value="${year}">${year}/${year + 1}</option>`)
+      .join('');
+  yearSelect.value = String(currentStartYear);
+  document.getElementById('reportSemester').addEventListener('change', applySemesterPreset);
+  yearSelect.addEventListener('change', applySemesterPreset);
+}
+
+function applySemesterPreset() {
+  const year = Number(document.getElementById('reportAcademicYear').value);
+  const semester = document.getElementById('reportSemester').value;
+  if (!year || !['1', '2'].includes(semester)) return;
+
+  const startYear = semester === '1' ? year : year + 1;
+  const from = semester === '1' ? `${startYear}-07-01` : `${startYear}-01-01`;
+  const to = semester === '1' ? `${startYear}-12-31` : `${startYear}-06-30`;
+  document.getElementById('reportFrom').value = from;
+  document.getElementById('reportTo').value = to;
+  muatLaporan();
+}
+
+function clearSemesterPreset() {
+  document.getElementById('reportSemester').value = '';
+}
 
 function updateReportSubjects() {
   const className = document.getElementById('reportClass').value;

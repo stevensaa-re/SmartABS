@@ -38,6 +38,7 @@ let teacherQrSession = null;
 let teacherQrRotationTimer = null;
 let teacherQrCountdownTimer = null;
 let teacherAttendanceUnsubscribe = null;
+const HARI_JADWAL = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
 
 async function initAbsensiGuru() {
   const session = Session.get();
@@ -61,7 +62,8 @@ async function initAbsensiGuru() {
   /* Default: kelas yang diampu guru */
   const defaultClass = teacher ? teacher.className : (classes[0] ? classes[0].name : '');
   if (defaultClass) classSelect.value = defaultClass;
-  refreshQrSchedules(schedulesGuru, defaultClass);
+  const requestedScheduleId = new URLSearchParams(window.location.search).get('scheduleId');
+  refreshQrSchedules(schedulesGuru, defaultClass, requestedScheduleId);
 
   document.getElementById('attendanceDate').value = todayISO();
 
@@ -90,15 +92,23 @@ async function initAbsensiGuru() {
   await restoreTeacherQrSession();
 }
 
-function refreshQrSchedules(schedules, className) {
+function refreshQrSchedules(schedules, className, preferredScheduleId = '') {
   const select = document.getElementById('qrSchedule');
-  const available = schedules.filter((schedule) => schedule.className === className);
+  const available = schedules
+    .filter((schedule) => schedule.className === className)
+    .sort((a, b) => HARI_JADWAL.indexOf(a.day) - HARI_JADWAL.indexOf(b.day) || a.start.localeCompare(b.start));
   select.innerHTML = available.length
-    ? available.map((schedule) => {
-        const label = `${schedule.day} · ${schedule.start}-${schedule.end} · ${schedule.subject}`;
-        return `<option value="${escapeHtml(schedule.id)}">${escapeHtml(label)}</option>`;
+    ? HARI_JADWAL.map((day) => {
+        const daySchedules = available.filter((schedule) => schedule.day === day);
+        if (!daySchedules.length) return '';
+        return `<optgroup label="${escapeHtml(day)}">${daySchedules.map((schedule) => `
+          <option value="${escapeHtml(schedule.id)}">${escapeHtml(schedule.start)}–${escapeHtml(schedule.end)} · ${escapeHtml(schedule.subject)}</option>
+        `).join('')}</optgroup>`;
       }).join('')
     : '<option value="">Tidak ada jadwal untuk kelas ini</option>';
+  if (preferredScheduleId && available.some((schedule) => schedule.id === preferredScheduleId)) {
+    select.value = preferredScheduleId;
+  }
 }
 
 async function startTeacherQrSession() {

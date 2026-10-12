@@ -1,3 +1,13 @@
 **/node_modules/
 **/serviceAccountKey*.json
+**/google-services.json
+**/local.properties
+**/.env
+**/.env.*
+!**/.env.example
+**/*.jks
+**/*.keystore
+.firebase/
+firebase-debug.log
+firestore-debug.log
 .DS_Store

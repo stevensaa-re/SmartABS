@@ -1,135 +1,128 @@
-# SMARTABS — Smart Attendance System
+# SMARTABS
 
-Aplikasi absensi sekolah (Admin / Guru / Siswa). Frontend HTML + JS murni, data lewat satu lapisan `API`
-sehingga **backend bisa diganti tanpa mengubah halaman**.
+**Smart Attendance System** untuk mengelola jadwal dan kehadiran sekolah. Website ini menyediakan
+panel untuk **admin, guru, dan siswa**; aplikasi Android native menggunakan Firebase yang sama.
 
-| Mode (`js/config.js` → `BACKEND`) | Data disimpan di | Cocok untuk |
-|---|---|---|
-| `local` (default) | localStorage browser | demo, belajar, pengembangan UI |
-| `mysql` | MySQL lewat REST API Node.js (`/server`) | server sekolah / hosting sendiri |
-| `firebase` | Firebase Auth + Cloud Firestore | tanpa server, hosting cloud |
+> SMARTABS sedang dikembangkan untuk proyek akhir semester. Fitur yang belum tercantum sebagai
+tersedia di bawah tidak boleh dianggap sudah siap dipakai.
 
----
+## Fitur
 
-## 1. Mode `local` (langsung jalan)
+- Akses sesuai peran: admin, guru, dan siswa.
+- Pengelolaan kelas, siswa, guru, akun, jadwal pelajaran, dan pengumuman.
+- Jadwal disusun per hari; guru melihat jadwal mengajarnya dan dapat membuka absensi langsung dari
+  mata pelajaran pada agenda.
+- Absensi QR per mata pelajaran dengan kode yang berganti otomatis; satu siswa hanya dapat
+  mencatat kehadiran satu kali per sesi.
+- Pengajuan izin/sakit dan persetujuan oleh petugas.
+- Filter laporan berdasarkan periode, kelas, mata pelajaran, dan status; ekspor CSV di website.
+- Dukungan Firebase Authentication + Cloud Firestore, serta backend MySQL untuk website.
 
-Buka lewat web server statis (jangan klik dua kali file HTML):
+### Sedang direncanakan
+
+Pengembangan lanjutan mencakup kalender akademik dan semester, impor data CSV/Excel, dashboard
+wali kelas, cakupan log audit/backup yang lebih luas, notifikasi push, serta aplikasi desktop
+Windows. Notifikasi push otomatis membutuhkan pengirim tepercaya; fitur ini ditunda sampai ada
+backend yang dapat digunakan tanpa biaya hosting tetap. Rilis desktop belum tersedia.
+
+## Menjalankan website
+
+Gunakan server HTTP lokal (jangan membuka HTML dengan klik dua kali):
 
 ```bash
-npx serve .          # atau: python3 -m http.server 8080 / ekstensi Live Server VS Code
+npx serve .
 ```
 
-Akun demo: `admin/admin123`, `guru/guru123`, `siswa/siswa123`.
+Mode `local` memakai `localStorage` browser dan hanya cocok untuk demo. Akun contoh:
+`admin/admin123`, `guru/guru123`, dan `siswa/siswa123`. Jangan gunakan akun demo untuk data nyata.
 
-## 2. Mode `mysql`
+### Backend Firebase
+
+1. Buat Firebase project sendiri dan aktifkan **Authentication → Email/Password** serta
+   **Cloud Firestore**.
+2. Salin konfigurasi aplikasi web dari Firebase Console ke `js/config.js` dan pilih
+   `BACKEND: 'firebase'`.
+3. Dari folder ini, deploy rules dan indexes:
+
+   ```bash
+   firebase deploy --only firestore:rules,firestore:indexes
+   ```
+
+4. Buat pengguna admin melalui Firebase Authentication, lalu buat dokumen `users/{uid}` yang
+   sesuai di Firestore. Hubungkan akun guru/siswa dengan profil akademiknya sebelum digunakan.
+5. Untuk database yang sudah berisi data, backup dahulu. Jangan menjalankan seed demo pada data
+   produksi.
+
+Website dan Android memakai project Firebase yang sama. Android memerlukan file
+`app/google-services.json` milik project tersebut; file itu tidak disertakan dalam repository ini.
+
+### Backend MySQL
 
 ```bash
-# 1) siapkan MySQL (buat user khusus, jangan pakai root untuk aplikasi)
-# 2) server
 cd server
 npm install
-cp .env.example .env        # isi DB_*, JWT_SECRET (min 32 karakter), CORS_ORIGIN
-npm run db:reset            # buat tabel + data demo  (db:init = tabel saja)
-npm start                   # http://localhost:3000/api/health
-
-# 3) frontend: js/config.js
-BACKEND: 'mysql',
-MYSQL: { API_URL: 'http://localhost:3000/api' }
+cp .env.example .env
+# Isi DB_*, JWT_SECRET (acak dan minimal 32 karakter), serta CORS_ORIGIN di .env.
+npm run db:reset
+npm start
 ```
 
-`CORS_ORIGIN` harus persis sama dengan alamat tempat frontend dibuka (mis. `http://localhost:5500`).
-Untuk database MySQL yang sudah berisi data, backup dahulu lalu jalankan
-`database/mysql/migrate-late-attendance.sql` satu kali sebelum memperbarui aplikasi; migrasi ini
-menambah status `Terlambat`, mata pelajaran, dan kunci unik per siswa/tanggal/mata pelajaran.
+Atur `BACKEND: 'mysql'` dan `MYSQL.API_URL` di `js/config.js`. Gunakan `npm run db:init` untuk
+membuat tabel tanpa data demo. QR per mata pelajaran memerlukan Firebase dan tidak tersedia pada
+mode MySQL maupun local.
 
-## 3. Mode `firebase`
+## Keamanan dan konfigurasi privat
 
-1. Firebase Console → buat project → aktifkan **Authentication → Email/Password** dan **Firestore Database**.
-2. Isi `APP_CONFIG.FIREBASE` di `js/config.js` (Project settings → Your apps → Web app), set `BACKEND: 'firebase'`.
-3. Deploy aturan keamanan: `firebase deploy --only firestore:rules` (file `database/firebase/firestore.rules`).
-   Untuk data lama, jalankan migrasi assignment guru setelah menyiapkan Application Default Credentials:
-   `cd database/firebase && node migrate-teacher-assignments.js`.
-4. Pengelolaan profil/status dan data akademik berjalan langsung ke Firestore pada paket Spark.
-   Reset password dikirim ke email login; akun dinonaktifkan tanpa menghapus data/Auth.
-5. Untuk mulai tanpa seed script: buat user admin di **Authentication**, lalu buat dokumen
-   `users/{uid}` di Firestore dengan field `name`, `username`, `usernameLower`, `role: "admin"`,
-   `status: "Aktif"`, dan `email`. Gunakan UID dari Authentication sebagai ID dokumen.
-   Setelah login, admin dapat mengelola data dari aplikasi.
+- Jangan commit `serviceAccountKey.json`, `.env`, kunci signing Android, atau file kredensial
+  lainnya. Aturan Git mengabaikan file rahasia tersebut.
+- Konfigurasi Firebase web (`apiKey`, `projectId`, dan sejenisnya) adalah pengenal aplikasi klien,
+  bukan password server. Website tetap harus memuat konfigurasi tersebut agar bisa terhubung ke
+  Firebase. Batasi API key sesuai domain web, package Android, dan API yang digunakan; tegakkan
+  akses data melalui Firestore Rules.
+- Jangan menaruh Firebase Admin SDK atau service-account key pada JavaScript browser maupun APK.
+- Browser camera memerlukan HTTPS (atau `localhost`). QR yang sedang aktif masih bisa dibagikan
+  dalam waktu singkat; guru perlu mengawasi proses scan.
+- Firebase Rules, bukan menu/guard browser, adalah batas otorisasi data sebenarnya. Tinjau rules
+  sebelum deploy ke project yang berisi data.
 
-### Absensi QR per mata pelajaran (gratis)
+## Struktur repository
 
-Gunakan `BACKEND: 'firebase'` di website serta Firestore Rules/indexes terbaru. Guru membuka
-**Absensi**, memilih jadwal, lalu menampilkan QR untuk siswa. Siswa memindai QR dari halaman
-Absensi; Android dan website memakai sesi Firestore yang sama. Token QR berubah tiap 20 detik,
-berlaku 30 detik, dan setiap akun siswa hanya dapat mencatat satu kehadiran untuk satu sesi.
-Jam ponsel siswa tidak dipakai untuk memvalidasi masa berlaku token.
-Status `Terlambat` dihitung setelah 15 menit sejak sesi QR dibuka, bukan dari jam jadwal; guru
-sebaiknya membuka QR tepat saat pelajaran dimulai. Perubahan manual mewajibkan alasan dan
-menyimpan riwayat audit yang tidak dapat diubah atau dihapus melalui klien.
-
-Fitur ini menggunakan Firebase Spark tanpa Cloud Functions atau layanan berbayar. Kamera
-website memerlukan HTTPS (atau localhost) dan izin kamera. QR dinamis mengurangi titip absen,
-tetapi tidak dapat mencegah QR aktif difoto/dibagikan dalam jendela singkat atau membuktikan
-lokasi fisik siswa tanpa backend tepercaya/pemeriksaan guru.
-
-Login akun baru memakai email yang dimasukkan admin pada **Data Pengguna**. Untuk kompatibilitas,
-akun lama tetap dapat login memakai username yang dipetakan ke domain `FIREBASE_LOGIN_DOMAIN`
-di `js/config.js` sampai email Auth-nya disejajarkan.
-
-Panduan lengkap untuk setup project yang sudah berisi data, backup, migrasi profil guru,
-deployment rules/indexes, dan setup Android ada di [`../FIREBASE_SETUP.md`](../FIREBASE_SETUP.md).
-Riwayat perubahan lintas platform ada di [`../CHANGELOG.md`](../CHANGELOG.md).
-
-### Publikasi di GitHub Pages
-
-Workflow `.github/workflows/pages.yml` menerbitkan situs otomatis setiap ada push ke branch `main`.
-Buat repository GitHub, unggah proyek tanpa `serviceAccountKey.json`, lalu pilih
-**Settings → Pages → Build and deployment → GitHub Actions**. Tambahkan domain
-`<username>.github.io` ke **Firebase Authentication → Settings → Authorized domains**.
-`.gitignore` mengabaikan service-account key dan `node_modules`; jangan pernah memaksa menambahkan
-key ke repository.
-
----
-
-## Struktur
-
-```
-index.html, login.html          halaman awal
-admin/ guru/ siswa/             halaman per role
-css/                            style, table, dashboard, login, responsive
-js/config.js                    pilih backend & sesi
-js/api.js                       dispatcher + daftar kontrak API (API_CONTRACT)
-js/adapters/local|mysql|firebase.js
-js/guard.js                     proteksi halaman (login + role)
-server/                         REST API Express + MySQL
-database/mysql/schema.sql       skema MySQL (FK, UNIQUE, ENUM)
-database/firebase/              firestore.rules, seed.js
-database/seed-data.js           data awal bersama (MySQL & Firebase)
-tools/prepare-production.js     hapus data/akun demo sebelum produksi
+```text
+admin/                 Halaman admin
+guru/                  Halaman guru
+siswa/                 Halaman siswa
+css/                   Gaya dan layout responsive
+js/                    Logika UI, kontrak API, dan adapter backend
+js/adapters/           Adapter local, MySQL, dan Firebase
+database/firebase/     Firestore Rules, indexes, dan utilitas migrasi/seed
+database/mysql/        Skema dan migrasi MySQL
+server/                REST API Node.js + MySQL
+tools/                 Utilitas persiapan rilis
+.github/workflows/     Otomasi GitHub Pages
 ```
 
-## Menyiapkan produksi
+Android native dikembangkan dalam folder project terpisah `SmartabsAndroid` di workspace. Untuk
+membangun aplikasi Android, buka folder tersebut dengan Android Studio dan siapkan file
+`google-services.json` Firebase lokal.
 
-1. `BACKEND` = `mysql` atau `firebase`.
-2. Pada **salinan** folder: `node tools/prepare-production.js` (menghapus `mock-data.js`, adapter local, dan tombol akun demo).
-3. **Ganti semua password demo** (`admin123`, dst.) atau buat admin baru lalu hapus akun demo.
-4. MySQL: pakai HTTPS (reverse proxy), `JWT_SECRET` acak panjang, user DB berhak terbatas, `TRUST_PROXY=1` di belakang Nginx.
-5. Cadangkan database secara berkala.
+## Publikasi GitHub Pages
 
-## Catatan keamanan
+Workflow `.github/workflows/pages.yml` menerbitkan website saat ada push ke branch `main`. Di
+repository GitHub, pilih **Settings → Pages → Build and deployment → GitHub Actions**, lalu
+tambahkan domain hosting ke **Firebase Authentication → Authorized domains**. Mode Firebase
+memerlukan konfigurasi project milik pemilik deployment.
 
-- Guard di browser (`guard.js`) hanya pengaman tampilan. Hak akses sebenarnya ditegakkan **server** (mode mysql: JWT + cek role + cek kepemilikan data) atau **Firestore Rules** (mode firebase).
-- Password: `local` menyimpan polos (khusus demo); `mysql` memakai bcrypt; `firebase` dikelola Firebase Auth.
-- Absen mandiri siswa di mode `mysql`: hanya "Hadir", hari ini, sekali, jam diambil dari server. Di mode `firebase` batas hari/jam tidak bisa ditegakkan Rules (zona UTC) — gunakan Cloud Function bila perlu.
+## Catatan produksi
 
-## Perbedaan perilaku antar mode
+- Pilih Firebase atau MySQL untuk data nyata; jangan gunakan backend `local`.
+- Ganti/hapus akun demo dan pastikan email serta status setiap akun benar.
+- Untuk MySQL, gunakan HTTPS, akun database dengan hak minimum, dan JWT secret acak.
+- Buat backup database terjadwal dan uji prosedur pemulihan sebelum operasi nyata.
+- Firestore Spark mendukung CRUD klien langsung, tetapi pekerjaan terjadwal dan push server-side
+  memerlukan backend tepercaya.
 
-| Hal | local | mysql | firebase |
-|---|---|---|---|
-| Ganti nama kelas yang sudah dipakai | boleh (merambat) | boleh | **ditolak** (nama disalin ke banyak dokumen) |
-| Ubah username / password user lain dari panel admin | boleh | boleh | **tidak** (terikat akun Auth; lewat Firebase Console) |
-| Hapus user | hapus akun | hapus akun | hapus profil saja; akun Auth tetap ada (butuh Admin SDK/Cloud Function) |
+## Kontribusi pengembangan
 
-## Menambah fitur
-
-Tambahkan nama fungsi ke `API_CONTRACT` (`js/api.js`), implementasikan di **ketiga** adapter, lalu panggil `API.namaFungsi()` dari halaman. Konsol browser akan memberi peringatan bila ada adapter yang belum lengkap.
+Halaman web memanggil `API` di `js/api.js`. Saat menambahkan operasi backend, perbarui
+`API_CONTRACT` dan implementasikan pada adapter yang didukung. Untuk perubahan data, perbarui
+Firestore Rules, skema/migrasi bila diperlukan, serta dokumentasi setup.

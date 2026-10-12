@@ -1,6 +1,7 @@
 /* =========================================================
    SMARTABS — Jadwal Pelajaran
    Admin : CRUD + filter
+   Guru  : jadwal mengajar pribadi
    Siswa : hanya melihat jadwal kelasnya
    ========================================================= */
 
@@ -15,8 +16,23 @@ document.addEventListener('DOMContentLoaded', async () => {
   const role = document.body.dataset.role;
 
   if (role === 'admin') await initJadwalAdmin();
+  else if (role === 'guru') await initJadwalGuru();
   else await initJadwalSiswa();
 });
+
+function urutJadwal(a, b) {
+  const selisihHari = HARI_SEKOLAH.indexOf(a.day) - HARI_SEKOLAH.indexOf(b.day);
+  return selisihHari || a.start.localeCompare(b.start);
+}
+
+function barisHari(hari, jumlah, kolom) {
+  return `<tr class="schedule-day-heading">
+    <td colspan="${kolom}">
+      <span>${escapeHtml(hari)}</span>
+      <span class="schedule-day-count">${jumlah} pelajaran</span>
+    </td>
+  </tr>`;
+}
 
 /* =========================================================
    ADMIN
@@ -26,10 +42,7 @@ async function initJadwalAdmin() {
   const tbody = document.getElementById('scheduleTableBody');
   tbody.innerHTML = loadingRow(6);
 
-  const [schedules, classes] = await Promise.all([
-    API.getSchedules(),
-    API.getClasses()
-  ]);
+  const [schedules, classes] = await Promise.all([API.getSchedules(), API.getClasses()]);
 
   daftarJadwal = schedules;
 
@@ -70,39 +83,41 @@ function renderJadwalAdmin() {
   const hasil = daftarJadwal.filter((jadwal) => {
     const cocokKeyword =
       !keyword ||
-      jadwal.subject.toLowerCase().includes(keyword) ||
-      jadwal.teacher.toLowerCase().includes(keyword);
+    String(jadwal.subject || '').toLowerCase().includes(keyword) ||
+    String(jadwal.teacher || '').toLowerCase().includes(keyword);
     const cocokHari = !hari || jadwal.day === hari;
     const cocokKelas = !kelas || jadwal.className === kelas;
     return cocokKeyword && cocokHari && cocokKelas;
   });
 
-  const urut = [...hasil].sort((a, b) => {
-    const selisihHari = HARI_SEKOLAH.indexOf(a.day) - HARI_SEKOLAH.indexOf(b.day);
-    return selisihHari !== 0 ? selisihHari : (a.start > b.start ? 1 : -1);
-  });
+  const urut = [...hasil].sort(urutJadwal);
 
   const tbody = document.getElementById('scheduleTableBody');
 
   tbody.innerHTML = urut.length
-    ? urut.map((jadwal) => `
-        <tr>
-          <td class="cell-strong">${escapeHtml(jadwal.day)}</td>
-          <td>${escapeHtml(jadwal.start)} - ${escapeHtml(jadwal.end)}</td>
-          <td>${escapeHtml(jadwal.subject)}</td>
-          <td>${escapeHtml(jadwal.teacher)}</td>
-          <td>${escapeHtml(jadwal.className)}</td>
-          <td>
-            <div class="action-btns">
-              <button class="btn-icon" data-action="edit" data-id="${jadwal.id}" title="Edit">
-                <i class="fa-solid fa-pen"></i>
-              </button>
-              <button class="btn-icon danger" data-action="delete" data-id="${jadwal.id}" title="Hapus">
-                <i class="fa-solid fa-trash"></i>
-              </button>
-            </div>
-          </td>
-        </tr>`).join('')
+    ? HARI_SEKOLAH.filter((hari) => !document.getElementById('filterScheduleDay').value ||
+        document.getElementById('filterScheduleDay').value === hari)
+      .map((hari) => {
+        const jadwalHari = urut.filter((jadwal) => jadwal.day === hari);
+        if (!jadwalHari.length) return '';
+        return barisHari(hari, jadwalHari.length, 6) + jadwalHari.map((jadwal) => `
+          <tr>
+            <td class="cell-strong">${escapeHtml(jadwal.start)} - ${escapeHtml(jadwal.end)}</td>
+            <td>${escapeHtml(jadwal.subject)}</td>
+            <td>${escapeHtml(jadwal.teacher)}</td>
+            <td>${escapeHtml(jadwal.className)}</td>
+            <td colspan="2">
+              <div class="action-btns">
+                <button class="btn-icon" data-action="edit" data-id="${escapeHtml(jadwal.id)}" title="Edit jadwal ${escapeHtml(jadwal.subject)}" aria-label="Edit jadwal ${escapeHtml(jadwal.subject)}">
+                  <i class="fa-solid fa-pen"></i>
+                </button>
+                <button class="btn-icon danger" data-action="delete" data-id="${escapeHtml(jadwal.id)}" title="Hapus jadwal ${escapeHtml(jadwal.subject)}" aria-label="Hapus jadwal ${escapeHtml(jadwal.subject)}">
+                  <i class="fa-solid fa-trash"></i>
+                </button>
+              </div>
+            </td>
+          </tr>`).join('');
+      }).join('')
     : emptyTableRow(6, 'Jadwal tidak ditemukan', 'Coba ubah filter atau tambahkan jadwal baru.');
 
   document.getElementById('scheduleCount').textContent = `${urut.length} jadwal ditampilkan`;
@@ -165,8 +180,26 @@ async function simpanJadwal(event) {
   if (!start || !end) {
     Toast.warning('Jam mulai dan jam selesai wajib diisi.');
     valid = false;
+  } else if (end <= start) {
+    Toast.warning('Jam selesai harus setelah jam mulai.');
+    valid = false;
   }
   if (!valid) return;
+
+  const bentrok = daftarJadwal.find((jadwal) => {
+    if (jadwal.id === id || jadwal.day !== day) return false;
+    const waktuBertabrakan = start < jadwal.end && end > jadwal.start;
+    const kelasSama = jadwal.className === className;
+    const guruSama = jadwal.teacher.trim().toLocaleLowerCase() === teacher.toLocaleLowerCase();
+    return waktuBertabrakan && (kelasSama || guruSama);
+  });
+  if (bentrok) {
+    const alasan = bentrok.className === className
+      ? `Kelas ${className} sudah memiliki ${bentrok.subject}`
+      : `${teacher} sudah mengajar ${bentrok.subject} di kelas ${bentrok.className}`;
+    Toast.warning(`${alasan} pada ${day}, ${bentrok.start}–${bentrok.end}.`);
+    return;
+  }
 
   try {
     const payload = { day, className, start, end, subject, teacher };
@@ -184,7 +217,7 @@ async function simpanJadwal(event) {
     closeModal('scheduleModal');
 
   } catch (error) {
-    Toast.error('Gagal menyimpan jadwal.');
+    Toast.error(error.message || 'Gagal menyimpan jadwal.');
   }
 }
 
@@ -204,7 +237,38 @@ async function hapusJadwal(id) {
     renderJadwalAdmin();
     Toast.success('Jadwal berhasil dihapus.');
   } catch (error) {
-    Toast.error('Gagal menghapus jadwal.');
+    Toast.error(error.message || 'Gagal menghapus jadwal.');
+  }
+}
+
+async function initJadwalGuru() {
+  const session = Session.get();
+  const tbody = document.getElementById('scheduleTableBody');
+  const dayFilter = document.getElementById('dayFilter');
+  tbody.innerHTML = loadingRow(4);
+
+  try {
+    const [teacher, schedules] = await Promise.all([
+      API.getTeacherByUsername(session.username),
+      API.getSchedules()
+    ]);
+    if (!teacher || teacher.status === 'Nonaktif') {
+      tbody.innerHTML = emptyTableRow(4, 'Profil guru belum tersedia', 'Hubungi admin untuk menautkan akun ke data guru.');
+      return;
+    }
+
+    document.getElementById('scheduleSubtitle').textContent =
+      `Jadwal mengajar ${teacher.name}${teacher.className ? ` · ${teacher.className}` : ''}.`;
+    daftarJadwal = schedules.filter((jadwal) =>
+      String(jadwal.teacher || '').trim().toLocaleLowerCase() === teacher.name.trim().toLocaleLowerCase()
+    );
+    setupJadwalHarian(dayFilter, () => {
+      const rows = renderJadwalHarian(daftarJadwal, dayFilter.value, true);
+      tbody.innerHTML = rows || emptyTableRow(4, 'Tidak ada jadwal', 'Jadwal mengajar Anda belum tersedia untuk hari yang dipilih.');
+    });
+  } catch (error) {
+    tbody.innerHTML = emptyTableRow(4, 'Jadwal gagal dimuat', escapeHtml(error.message || 'Periksa koneksi lalu coba lagi.'));
+    Toast.error(error.message || 'Jadwal guru gagal dimuat.');
   }
 }
 
@@ -217,7 +281,7 @@ async function initJadwalSiswa() {
   const tbody = document.getElementById('scheduleTableBody');
   const dayFilter = document.getElementById('dayFilter');
 
-  tbody.innerHTML = loadingRow(4);
+  tbody.innerHTML = loadingRow(3);
 
   const student = await API.getStudentByNis(session.nis);
   const className = student ? student.className : session.className;
@@ -228,39 +292,55 @@ async function initJadwalSiswa() {
   const semua = await API.getSchedules();
   daftarJadwal = semua.filter((jadwal) => jadwal.className === className);
 
-  let hariAktif = currentDayName();
+  setupJadwalHarian(dayFilter, () => {
+    const rows = renderJadwalHarian(daftarJadwal, dayFilter.value);
+    tbody.innerHTML = rows || emptyTableRow(3, 'Tidak ada jadwal', 'Belum ada jadwal untuk hari yang dipilih.');
+  });
+}
 
+function setupJadwalHarian(dayFilter, render) {
+  const today = currentDayName();
+  const defaultDay = HARI_SEKOLAH.includes(today) ? today : 'Semua';
+  dayFilter.classList.add('schedule-day-filter');
   dayFilter.innerHTML = ['Semua', ...HARI_SEKOLAH]
-    .map((hari) => `<button class="chip ${hari === hariAktif ? 'active' : ''}" data-day="${hari}">${hari}</button>`)
+    .map((hari) => `<button type="button" class="chip ${hari === defaultDay ? 'active' : ''}" data-day="${hari}" aria-pressed="${hari === defaultDay}">
+      ${hari === today ? 'Hari ini · ' : ''}${hari}
+    </button>`)
     .join('');
-
-  function render() {
-    const hasil = daftarJadwal
-      .filter((jadwal) => hariAktif === 'Semua' || jadwal.day === hariAktif)
-      .sort((a, b) => {
-        const selisihHari = HARI_SEKOLAH.indexOf(a.day) - HARI_SEKOLAH.indexOf(b.day);
-        return selisihHari !== 0 ? selisihHari : (a.start > b.start ? 1 : -1);
-      });
-
-    tbody.innerHTML = hasil.length
-      ? hasil.map((jadwal) => `
-          <tr>
-            <td class="cell-strong">${escapeHtml(jadwal.day)}</td>
-            <td>${escapeHtml(jadwal.start)} - ${escapeHtml(jadwal.end)}</td>
-            <td>${escapeHtml(jadwal.subject)}</td>
-            <td>${escapeHtml(jadwal.teacher)}</td>
-          </tr>`).join('')
-      : emptyTableRow(4, 'Tidak ada jadwal', 'Belum ada jadwal untuk hari yang dipilih.');
-  }
-
+  dayFilter.value = defaultDay;
   dayFilter.querySelectorAll('.chip').forEach((chip) => {
     chip.addEventListener('click', () => {
-      hariAktif = chip.dataset.day;
-      dayFilter.querySelectorAll('.chip').forEach((item) => item.classList.remove('active'));
-      chip.classList.add('active');
+      dayFilter.value = chip.dataset.day;
+      dayFilter.querySelectorAll('.chip').forEach((item) => {
+        const active = item === chip;
+        item.classList.toggle('active', active);
+        item.setAttribute('aria-pressed', String(active));
+      });
       render();
     });
   });
-
   render();
+}
+
+function renderJadwalHarian(schedules, activeDay, teacherView = false) {
+  const hasil = schedules
+    .filter((jadwal) => activeDay === 'Semua' || jadwal.day === activeDay)
+    .sort(urutJadwal);
+  if (!hasil.length) return '';
+
+  return HARI_SEKOLAH
+    .filter((hari) => activeDay === 'Semua' || hari === activeDay)
+    .map((hari) => {
+      const jadwalHari = hasil.filter((jadwal) => jadwal.day === hari);
+      if (!jadwalHari.length) return '';
+      return barisHari(hari, jadwalHari.length, teacherView ? 4 : 3) + jadwalHari.map((jadwal) => `
+        <tr>
+          <td class="cell-strong schedule-time">${escapeHtml(jadwal.start)} – ${escapeHtml(jadwal.end)}</td>
+          <td class="cell-strong">${escapeHtml(jadwal.subject)}</td>
+          <td>${escapeHtml(teacherView ? jadwal.className : jadwal.teacher)}</td>
+          ${teacherView ? `<td><a class="btn btn-outline schedule-attendance-link" href="attendance.html?scheduleId=${encodeURIComponent(jadwal.id)}">
+            <i class="fa-solid fa-clipboard-check"></i> Buka absensi
+          </a></td>` : ''}
+        </tr>`).join('');
+    }).join('');
 }

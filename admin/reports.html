@@ -41,6 +41,7 @@
       <section class="card no-print">
         <div class="card-body">
           <div class="filter-bar" id="reportFilter">
+            <p class="text-muted report-semester-hint">Preset semester memakai pola Jul–Des dan Jan–Jun; tanggal tetap dapat disesuaikan.</p>
             <div class="form-group">
               <label for="reportFrom">Dari Tanggal</label>
               <input type="date" id="reportFrom" class="form-control">
@@ -48,6 +49,20 @@
             <div class="form-group">
               <label for="reportTo">Sampai Tanggal</label>
               <input type="date" id="reportTo" class="form-control">
+            </div>
+            <div class="form-group">
+              <label for="reportAcademicYear">Tahun Ajaran</label>
+              <select id="reportAcademicYear" class="form-control">
+                <option value="">Pilih tahun ajaran</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="reportSemester">Semester</label>
+              <select id="reportSemester" class="form-control">
+                <option value="">Periode manual</option>
+                <option value="1">Semester 1 · Jul–Des</option>
+                <option value="2">Semester 2 · Jan–Jun</option>
+              </select>
             </div>
             <div class="form-group">
               <label for="reportClass">Kelas</label>

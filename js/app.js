@@ -20,6 +20,7 @@ const MENUS = {
   guru: [
     { key: 'dashboard',   label: 'Dashboard',         icon: 'fa-gauge-high',        href: 'dashboard.html' },
     { key: 'attendance',  label: 'Absensi',           icon: 'fa-clipboard-check',   href: 'attendance.html' },
+    { key: 'schedule',    label: 'Jadwal Mengajar',   icon: 'fa-calendar-days',     href: 'schedule.html' },
     { key: 'students',    label: 'Data Siswa',        icon: 'fa-user-graduate',     href: 'students.html' },
     { key: 'permissions', label: 'Izin / Sakit / Alpa', icon: 'fa-file-circle-check', href: 'permissions.html' },
     { key: 'reports',     label: 'Laporan',           icon: 'fa-chart-column',      href: 'reports.html' }
