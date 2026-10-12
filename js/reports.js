@@ -4,18 +4,20 @@
 
 let dataLaporan = [];
 let kelasTersedia = [];
+let jadwalLaporan = [];
 
 document.addEventListener('DOMContentLoaded', async () => {
   if (document.body.dataset.page !== 'reports') return;
 
   const tbody = document.getElementById('reportTableBody');
-  tbody.innerHTML = loadingRow(8);
+  tbody.innerHTML = loadingRow(9);
 
   /* Default periode: 14 hari terakhir */
   document.getElementById('reportFrom').value = shiftDate(-14);
   document.getElementById('reportTo').value = todayISO();
 
   kelasTersedia = await API.getClasses();
+  jadwalLaporan = await API.getSchedules();
   document.getElementById('reportClass').innerHTML =
     '<option value="">Semua Kelas</option>' +
     kelasTersedia.map((kelas) => `<option value="${escapeHtml(kelas.name)}">${escapeHtml(kelas.name)}</option>`).join('');
@@ -29,6 +31,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  document.getElementById('reportClass').addEventListener('change', updateReportSubjects);
+  updateReportSubjects();
   document.getElementById('btnFilterReport').addEventListener('click', muatLaporan);
   document.getElementById('btnExportCsv').addEventListener('click', exportCsv);
   document.getElementById('btnPrint').addEventListener('click', () => window.print());
@@ -36,10 +40,24 @@ document.addEventListener('DOMContentLoaded', async () => {
   await muatLaporan();
 });
 
+function updateReportSubjects() {
+  const className = document.getElementById('reportClass').value;
+  const select = document.getElementById('reportSubject');
+  const previous = select.value;
+  const subjects = [...new Set(jadwalLaporan
+    .filter((schedule) => !className || schedule.className === className)
+    .map((schedule) => schedule.subject)
+    .filter(Boolean))].sort((a, b) => a.localeCompare(b, 'id'));
+  select.innerHTML = '<option value="">Semua Mata Pelajaran</option>' +
+    subjects.map((subject) => `<option value="${escapeHtml(subject)}">${escapeHtml(subject)}</option>`).join('');
+  if (subjects.includes(previous)) select.value = previous;
+}
+
 async function muatLaporan() {
   const from = document.getElementById('reportFrom').value;
   const to   = document.getElementById('reportTo').value;
   const className = document.getElementById('reportClass').value;
+  const subject = document.getElementById('reportSubject').value;
   const status = document.getElementById('reportStatus').value;
 
   if (from && to && from > to) {
@@ -48,13 +66,13 @@ async function muatLaporan() {
   }
 
   const tbody = document.getElementById('reportTableBody');
-  tbody.innerHTML = loadingRow(8);
+  tbody.innerHTML = loadingRow(9);
 
-  dataLaporan = await API.getReport({ from, to, className, status });
+  dataLaporan = await API.getReport({ from, to, className, subject, status });
   renderLaporan();
 
   document.getElementById('reportPeriod').textContent =
-    `${from ? formatDate(from) : 'Awal'} — ${to ? formatDate(to) : 'Sekarang'}`;
+    `${from ? formatDate(from) : 'Awal'} — ${to ? formatDate(to) : 'Sekarang'}${subject ? ` · ${subject}` : ''}`;
 }
 
 function renderLaporan() {
@@ -62,7 +80,7 @@ function renderLaporan() {
   const tfoot = document.getElementById('reportTableFoot');
 
   if (!dataLaporan.length) {
-    tbody.innerHTML = emptyTableRow(8, 'Tidak ada data laporan', 'Coba ubah periode atau filter kelas.');
+    tbody.innerHTML = emptyTableRow(9, 'Tidak ada data laporan', 'Coba ubah periode atau filter kelas.');
     tfoot.innerHTML = '';
     return;
   }
@@ -76,6 +94,7 @@ function renderLaporan() {
         <td class="text-muted">${escapeHtml(row.nis)}</td>
         <td>${escapeHtml(row.className)}</td>
         <td class="text-center">${row.hadir}</td>
+        <td class="text-center">${row.terlambat}</td>
         <td class="text-center">${row.izin}</td>
         <td class="text-center">${row.sakit}</td>
         <td class="text-center">${row.alpa}</td>
@@ -92,19 +111,21 @@ function renderLaporan() {
 
   const total = dataLaporan.reduce((acc, row) => {
     acc.hadir += row.hadir;
+    acc.terlambat += row.terlambat;
     acc.izin += row.izin;
     acc.sakit += row.sakit;
     acc.alpa += row.alpa;
     acc.total += row.total;
     return acc;
-  }, { hadir: 0, izin: 0, sakit: 0, alpa: 0, total: 0 });
+  }, { hadir: 0, terlambat: 0, izin: 0, sakit: 0, alpa: 0, total: 0 });
 
-  const rataRata = total.total ? Math.round((total.hadir / total.total) * 100) : 0;
+  const rataRata = total.total ? Math.round(((total.hadir + total.terlambat) / total.total) * 100) : 0;
 
   tfoot.innerHTML = `
     <tr>
       <td colspan="3">TOTAL (${dataLaporan.length} siswa)</td>
       <td class="text-center">${total.hadir}</td>
+      <td class="text-center">${total.terlambat}</td>
       <td class="text-center">${total.izin}</td>
       <td class="text-center">${total.sakit}</td>
       <td class="text-center">${total.alpa}</td>
@@ -120,13 +141,14 @@ function exportCsv() {
     return;
   }
 
-  const header = ['Nama', 'NIS', 'Kelas', 'Hadir', 'Izin', 'Sakit', 'Alpa', 'Persentase'];
+  const header = ['Nama', 'NIS', 'Kelas', 'Hadir', 'Terlambat', 'Izin', 'Sakit', 'Alpa', 'Persentase'];
 
   const baris = dataLaporan.map((row) => [
     row.name,
     row.nis,
     row.className,
     row.hadir,
+    row.terlambat,
     row.izin,
     row.sakit,
     row.alpa,

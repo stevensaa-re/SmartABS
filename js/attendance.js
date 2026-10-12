@@ -7,11 +7,24 @@
 document.addEventListener('DOMContentLoaded', async () => {
   if (document.body.dataset.page !== 'attendance') return;
 
+  updateAttendanceNetworkStatus();
+  window.addEventListener('online', updateAttendanceNetworkStatus);
+  window.addEventListener('offline', updateAttendanceNetworkStatus);
   const role = document.body.dataset.role;
 
   if (role === 'guru') await initAbsensiGuru();
   else await initAbsensiSiswa();
 });
+
+function updateAttendanceNetworkStatus() {
+  const status = document.getElementById('attendanceNetworkStatus');
+  if (!status) return;
+  const online = navigator.onLine;
+  status.textContent = online
+    ? 'Koneksi internet terdeteksi. Sistem memvalidasi absensi melalui server.'
+    : 'Offline. Pemindaian QR dan sinkronisasi Firebase memerlukan koneksi internet.';
+  status.classList.toggle('offline', !online);
+}
 
 /* =========================================================
    GURU
@@ -57,8 +70,12 @@ async function initAbsensiGuru() {
   classSelect.addEventListener('change', () => {
     refreshQrSchedules(schedulesGuru, classSelect.value);
     muatAbsensiGuru();
+    restoreTeacherQrSession();
   });
-  document.getElementById('attendanceDate').addEventListener('change', muatAbsensiGuru);
+  document.getElementById('attendanceDate').addEventListener('change', () => {
+    muatAbsensiGuru();
+    restoreTeacherQrSession();
+  });
   document.getElementById('searchAttendance').addEventListener('input', debounce(renderAbsensiGuru));
 
   document.getElementById('closeStatusModal').addEventListener('click', () => closeModal('statusModal'));
@@ -66,7 +83,11 @@ async function initAbsensiGuru() {
   document.getElementById('statusForm').addEventListener('submit', simpanStatusKehadiran);
   document.getElementById('btnStartQr').addEventListener('click', startTeacherQrSession);
   document.getElementById('btnCloseQr').addEventListener('click', closeTeacherQrSession);
-  document.getElementById('qrSchedule').addEventListener('change', renderAbsensiGuru);
+  document.getElementById('qrSchedule').addEventListener('change', () => {
+    renderAbsensiGuru();
+    restoreTeacherQrSession();
+  });
+  await restoreTeacherQrSession();
 }
 
 function refreshQrSchedules(schedules, className) {
@@ -92,6 +113,16 @@ async function startTeacherQrSession() {
     Toast.warning('Pilih jadwal mata pelajaran yang valid.');
     return;
   }
+  const clock = currentTime();
+  const outsideSchedule = schedule.day !== currentDayName() || clock < schedule.start || clock > schedule.end;
+  if (outsideSchedule) {
+    const confirmed = await confirmDialog({
+      title: 'Sesi di luar jadwal',
+      message: `Jadwal ${schedule.subject} tercatat ${schedule.day} ${schedule.start}-${schedule.end}, sedangkan sekarang ${currentDayName()} ${clock}. Tetap buka sesi?`,
+      confirmText: 'Tetap Buka Sesi'
+    });
+    if (!confirmed) return;
+  }
 
   button.disabled = true;
   try {
@@ -104,24 +135,49 @@ async function startTeacherQrSession() {
       document.getElementById('qrSessionPanel').classList.add('hidden');
       setTeacherAttendanceControls(false);
     }
-    teacherQrSession = await API.startAttendanceSession({
+    const session = await API.startAttendanceSession({
       scheduleId: schedule.id,
       subject: schedule.subject,
       className: schedule.className,
       date: todayISO()
     });
-    renderTeacherQr();
-    document.getElementById('qrSessionPanel').classList.remove('hidden');
-    setTeacherAttendanceControls(true);
-    subscribeTeacherAttendance();
-    teacherQrRotationTimer = setInterval(rotateTeacherQr, 20_000);
-    teacherQrCountdownTimer = setInterval(updateQrCountdown, 1_000);
+    activateTeacherQrSession(session);
     Toast.success(`Sesi QR ${schedule.subject} dimulai.`);
   } catch (error) {
     Toast.error(error.message || 'Gagal memulai sesi QR.');
   } finally {
     button.disabled = false;
   }
+}
+
+async function restoreTeacherQrSession() {
+  if (APP_CONFIG.BACKEND !== 'firebase' || typeof API.getActiveAttendanceSession !== 'function') return;
+  const scheduleId = document.getElementById('qrSchedule').value;
+  const schedule = schedulesGuru.find((item) => item.id === scheduleId);
+  if (!schedule) return;
+  try {
+    const activeSession = await API.getActiveAttendanceSession({
+      scheduleId,
+      className: schedule.className,
+      date: todayISO()
+    });
+    if (!activeSession) return;
+    activateTeacherQrSession(await API.rotateAttendanceSession(activeSession.id));
+  } catch (error) {
+    Toast.error(error.message || 'Sesi QR aktif gagal dipulihkan.');
+  }
+}
+
+function activateTeacherQrSession(session) {
+  clearQrTimers();
+  stopTeacherAttendanceSubscription();
+  teacherQrSession = session;
+  renderTeacherQr();
+  document.getElementById('qrSessionPanel').classList.remove('hidden');
+  setTeacherAttendanceControls(true);
+  subscribeTeacherAttendance();
+  teacherQrRotationTimer = setInterval(rotateTeacherQr, 20_000);
+  teacherQrCountdownTimer = setInterval(updateQrCountdown, 1_000);
 }
 
 function renderTeacherQr() {
@@ -135,7 +191,11 @@ function renderTeacherQr() {
     scheduleId: teacherQrSession.scheduleId,
     subject: teacherQrSession.subject,
     className: teacherQrSession.className,
-    date: teacherQrSession.date
+    date: teacherQrSession.date,
+    sessionStartedAt: {
+      seconds: teacherQrSession.sessionStartedAtSeconds,
+      nanoseconds: teacherQrSession.sessionStartedAtNanos
+    }
   };
   new QRCode(target, {
     text: JSON.stringify(payload),
@@ -245,7 +305,8 @@ function renderAbsensiGuru() {
 
   tbody.innerHTML = hasil.length
     ? hasil.map((siswa, index) => {
-        const record = selectedRecords.find((row) => row.studentId === siswa.nis);
+        const record = selectedRecords.find((row) => row.studentId === siswa.nis && selectedSchedule && row.subject === selectedSchedule.subject)
+          || selectedRecords.find((row) => row.studentId === siswa.nis && !row.subject);
         const status = record ? record.status : 'Belum Absen';
         const waktu  = record && record.time ? record.time : '-';
 
@@ -279,23 +340,51 @@ function renderAbsensiGuru() {
   document.getElementById('attendanceSummary').innerHTML = `
     <span class="summary-item"><i class="fa-solid fa-users"></i> Total: <strong>${dataSiswaGuru.length}</strong></span>
     <span class="summary-item"><i class="fa-solid fa-circle-check" style="color:#16a34a"></i> Hadir: <strong>${hitung('Hadir')}</strong></span>
+    <span class="summary-item"><i class="fa-solid fa-clock" style="color:#d97706"></i> Terlambat: <strong>${hitung('Terlambat')}</strong></span>
     <span class="summary-item"><i class="fa-solid fa-file-lines" style="color:#7c3aed"></i> Izin: <strong>${hitung('Izin')}</strong></span>
     <span class="summary-item"><i class="fa-solid fa-notes-medical" style="color:#d97706"></i> Sakit: <strong>${hitung('Sakit')}</strong></span>
     <span class="summary-item"><i class="fa-solid fa-user-xmark" style="color:#dc2626"></i> Alpa: <strong>${hitung('Alpa')}</strong></span>
     <span class="summary-item"><i class="fa-solid fa-hourglass-half"></i> Belum Absen: <strong>${Math.max(belum, 0)}</strong></span>`;
 }
 
-function openStatusForm(nis) {
+function selectedAttendanceRecord(nis) {
+  const selectedSchedule = schedulesGuru.find((item) => item.id === document.getElementById('qrSchedule').value);
+  return dataAbsensiGuru.find((row) =>
+    row.studentId === nis && selectedSchedule && row.subject === selectedSchedule.subject
+  ) || dataAbsensiGuru.find((row) => row.studentId === nis && !row.subject) || null;
+}
+
+async function openStatusForm(nis) {
   const siswa = dataSiswaGuru.find((item) => item.nis === nis);
   if (!siswa) return;
 
-  const record = dataAbsensiGuru.find((row) => row.studentId === nis);
+  const selectedSchedule = schedulesGuru.find((item) => item.id === document.getElementById('qrSchedule').value);
+  const record = selectedAttendanceRecord(nis);
 
   document.getElementById('statusNis').value = nis;
   document.getElementById('statusStudentInfo').textContent =
     `${siswa.name} — ${siswa.nis} (${siswa.className})`;
   document.getElementById('statusValue').value = record ? record.status : 'Hadir';
   document.getElementById('statusNote').value = record ? (record.note || '') : '';
+  const history = document.getElementById('statusHistory');
+  history.textContent = 'Memuat riwayat perubahan...';
+  if (typeof API.getAttendanceHistory === 'function' && record) {
+    try {
+      const entries = await API.getAttendanceHistory(record.id);
+      history.innerHTML = entries.length
+        ? `<strong>Riwayat perubahan</strong>${entries.map((entry) => {
+            const createdAt = entry.createdAt && typeof entry.createdAt.toDate === 'function'
+              ? entry.createdAt.toDate().toLocaleString('id-ID')
+              : '-';
+            return `<p>${escapeHtml(entry.actorName || 'Petugas')} · ${escapeHtml(createdAt)}<br>${escapeHtml(entry.previousStatus || 'Belum ada')} → ${escapeHtml(entry.nextStatus)} · ${escapeHtml(entry.reason)}</p>`;
+          }).join('')}`
+        : '<p>Belum ada perubahan manual tercatat.</p>';
+    } catch (error) {
+      history.textContent = error.message || 'Riwayat perubahan tidak dapat dimuat.';
+    }
+  } else {
+    history.textContent = record ? 'Riwayat perubahan tidak tersedia pada backend ini.' : 'Belum ada catatan sebelumnya.';
+  }
 
   openModal('statusModal');
 }
@@ -310,6 +399,17 @@ async function simpanStatusKehadiran(event) {
   const status = document.getElementById('statusValue').value;
   const note   = document.getElementById('statusNote').value.trim();
   const date   = document.getElementById('attendanceDate').value || todayISO();
+  const record = selectedAttendanceRecord(nis);
+  const selectedSchedule = schedulesGuru.find((item) => item.id === document.getElementById('qrSchedule').value);
+  const sessionId = record
+    ? (record.sessionId || '')
+    : teacherQrSession && selectedSchedule && teacherQrSession.scheduleId === selectedSchedule.id
+      ? teacherQrSession.id
+      : '';
+  if (note.length < 5) {
+    Toast.warning('Tuliskan alasan minimal 5 karakter untuk menjaga jejak koreksi.');
+    return;
+  }
 
   try {
     await API.saveAttendance({
@@ -317,6 +417,10 @@ async function simpanStatusKehadiran(event) {
       name: siswa.name,
       className: siswa.className,
       date,
+      attendanceId: record ? record.id : (sessionId ? `${sessionId}_${siswa.nis}` : undefined),
+      sessionId: sessionId || undefined,
+      scheduleId: selectedSchedule ? selectedSchedule.id : undefined,
+      subject: selectedSchedule ? selectedSchedule.subject : undefined,
       time: status === 'Hadir' ? currentTime() : '-',
       status,
       note: note || 'Diinput oleh guru'
@@ -327,7 +431,7 @@ async function simpanStatusKehadiran(event) {
     await muatAbsensiGuru();
 
   } catch (error) {
-    Toast.error('Gagal memperbarui status kehadiran.');
+    Toast.error(error.message || 'Gagal memperbarui status kehadiran.');
   }
 }
 

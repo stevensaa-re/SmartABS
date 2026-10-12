@@ -1,16 +1,17 @@
 const router = require('express').Router();
+const { randomUUID } = require('crypto');
 const { query, queryOne } = require('../db');
 const { requireRole, assertCanAccessStudent } = require('../auth');
 const { asyncHandler, assert, str, oneOf, isValidDate, todayISO, nowHHMM, shiftISO, HHMM, HttpError } = require('../util');
 
-const STATUSES = ['Hadir', 'Izin', 'Sakit', 'Alpa'];
+const STATUSES = ['Hadir', 'Terlambat', 'Izin', 'Sakit', 'Alpa'];
 
 const SELECT = `
   SELECT a.id, a.student_nis AS studentId, s.name,
          COALESCE(c.name, '-') AS className,
          a.\`date\` AS \`date\`,
          COALESCE(TIME_FORMAT(a.\`time\`, '%H:%i'), '-') AS \`time\`,
-         a.status, a.note
+         a.subject, a.status, a.note
   FROM attendance a
   JOIN students s ON s.nis = a.student_nis
   LEFT JOIN classes c ON c.id = a.class_id`;
@@ -58,6 +59,15 @@ router.get('/student/:nis/date/:date', asyncHandler(async (req, res) => {
   res.json(await queryOne(`${SELECT} WHERE a.student_nis = ? AND a.\`date\` = ?`, [req.params.nis, req.params.date]));
 }));
 
+router.get('/student/:nis/date/:date/all', asyncHandler(async (req, res) => {
+  await assertCanAccessStudent(req, req.params.nis);
+  assert(isValidDate(req.params.date), 'Format tanggal tidak valid.');
+  res.json(await query(
+    `${SELECT} WHERE a.student_nis = ? AND a.\`date\` = ? ORDER BY a.subject`,
+    [req.params.nis, req.params.date]
+  ));
+}));
+
 /* Simpan absensi (insert atau update untuk pasangan siswa+tanggal).
    - Admin/guru : bebas mengatur status siswa mana pun (bukan tanggal masa depan)
    - Siswa      : hanya absen "Hadir" untuk dirinya, HARI INI, sekali saja,
@@ -65,6 +75,7 @@ router.get('/student/:nis/date/:date', asyncHandler(async (req, res) => {
 router.post('/', requireRole('admin', 'guru', 'siswa'), asyncHandler(async (req, res) => {
   const nis = str(String(req.body.studentId || ''));
   const date = str(req.body.date);
+  const subject = str(req.body.subject).slice(0, 100);
   const status = req.body.status;
 
   assert(nis, 'Siswa wajib diisi.');
@@ -88,23 +99,26 @@ router.post('/', requireRole('admin', 'guru', 'siswa'), asyncHandler(async (req,
 
     time = nowHHMM();
     note = 'Absensi mandiri melalui SMARTABS';
-  } else if (status === 'Hadir') {
+  } else if (status === 'Hadir' || status === 'Terlambat') {
     const given = str(req.body.time);
     time = HHMM.test(given) ? given : nowHHMM();
   }
 
-  const id = `A-${date}-${nis}`;
+  const id = `A-${randomUUID().replace(/-/g, '').slice(0, 24)}`;
 
   await query(
-    `INSERT INTO attendance (id, student_nis, class_id, \`date\`, \`time\`, status, note)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO attendance (id, student_nis, class_id, \`date\`, \`time\`, subject, status, note)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE
        class_id = VALUES(class_id), \`time\` = VALUES(\`time\`),
        status = VALUES(status), note = VALUES(note)`,
-    [id, nis, student.class_id, date, time, status, note]
+    [id, nis, student.class_id, date, time, subject, status, note]
   );
 
-  res.status(201).json(await queryOne(`${SELECT} WHERE a.student_nis = ? AND a.\`date\` = ?`, [nis, date]));
+  res.status(201).json(await queryOne(
+    `${SELECT} WHERE a.student_nis = ? AND a.\`date\` = ? AND a.subject = ?`,
+    [nis, date, subject]
+  ));
 }));
 
 router.delete('/:id', requireRole('admin', 'guru'), asyncHandler(async (req, res) => {

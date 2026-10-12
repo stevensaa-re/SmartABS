@@ -38,6 +38,9 @@ MYSQL: { API_URL: 'http://localhost:3000/api' }
 ```
 
 `CORS_ORIGIN` harus persis sama dengan alamat tempat frontend dibuka (mis. `http://localhost:5500`).
+Untuk database MySQL yang sudah berisi data, backup dahulu lalu jalankan
+`database/mysql/migrate-late-attendance.sql` satu kali sebelum memperbarui aplikasi; migrasi ini
+menambah status `Terlambat`, mata pelajaran, dan kunci unik per siswa/tanggal/mata pelajaran.
 
 ## 3. Mode `firebase`
 
@@ -60,6 +63,9 @@ Gunakan `BACKEND: 'firebase'` di website serta Firestore Rules/indexes terbaru. 
 Absensi; Android dan website memakai sesi Firestore yang sama. Token QR berubah tiap 20 detik,
 berlaku 30 detik, dan setiap akun siswa hanya dapat mencatat satu kehadiran untuk satu sesi.
 Jam ponsel siswa tidak dipakai untuk memvalidasi masa berlaku token.
+Status `Terlambat` dihitung setelah 15 menit sejak sesi QR dibuka, bukan dari jam jadwal; guru
+sebaiknya membuka QR tepat saat pelajaran dimulai. Perubahan manual mewajibkan alasan dan
+menyimpan riwayat audit yang tidak dapat diubah atau dihapus melalui klien.
 
 Fitur ini menggunakan Firebase Spark tanpa Cloud Functions atau layanan berbayar. Kamera
 website memerlukan HTTPS (atau localhost) dan izin kamera. QR dinamis mengurangi titip absen,

@@ -126,7 +126,7 @@ CREATE TABLE announcements (
 ) ENGINE=InnoDB;
 
 -- ---------------------------------------------------------
--- attendance : absensi harian. SATU baris per siswa per tanggal.
+-- attendance : satu baris per siswa, tanggal, dan mata pelajaran.
 -- class_id adalah "snapshot" kelas saat absensi dicatat, sehingga
 -- riwayat tetap benar walaupun siswa kemudian pindah kelas.
 -- ---------------------------------------------------------
@@ -136,12 +136,13 @@ CREATE TABLE attendance (
   class_id    VARCHAR(20)  NULL,
   `date`      DATE         NOT NULL,
   `time`      TIME         NULL,
-  status      ENUM('Hadir','Izin','Sakit','Alpa') NOT NULL,
+  subject     VARCHAR(100) NOT NULL DEFAULT '',
+  status      ENUM('Hadir','Terlambat','Izin','Sakit','Alpa') NOT NULL,
   note        VARCHAR(255) NOT NULL DEFAULT '',
   created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
-  UNIQUE KEY uq_attendance_student_date (student_nis, `date`),
+  UNIQUE KEY uq_attendance_student_date_subject (student_nis, `date`, subject),
   KEY idx_attendance_date (`date`),
   KEY idx_attendance_class_date (class_id, `date`),
   CONSTRAINT fk_attendance_student FOREIGN KEY (student_nis) REFERENCES students (nis)

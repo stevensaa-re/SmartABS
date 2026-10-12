@@ -23,6 +23,7 @@
     <header class="navbar" id="navbar"></header>
 
     <main class="content">
+      <div id="attendanceNetworkStatus" class="network-status" role="status"></div>
       <div class="page-head">
         <div>
           <h1>Absensi Kelas</h1>
@@ -33,7 +34,7 @@
       <section class="card qr-session-card">
         <div>
           <h2>Absensi QR per Mata Pelajaran</h2>
-          <p class="text-muted">Mulai sesi saat siswa sudah berada di kelas. QR berganti otomatis setiap 20 detik.</p>
+          <p class="text-muted">Mulai sesi tepat saat pelajaran dimulai. QR berganti otomatis setiap 20 detik; pemindaian setelah 15 menit tercatat Terlambat.</p>
         </div>
         <div class="filter-group qr-session-controls">
           <select id="qrSchedule" class="form-control" aria-label="Jadwal mata pelajaran"></select>
@@ -98,11 +99,13 @@
       <div class="modal-body">
         <input type="hidden" id="statusNis">
         <p class="modal-info" id="statusStudentInfo">-</p>
+        <div id="statusHistory" class="attendance-history" aria-live="polite"></div>
 
         <div class="form-group">
           <label for="statusValue">Status</label>
           <select id="statusValue" class="form-control">
             <option value="Hadir">Hadir</option>
+            <option value="Terlambat">Terlambat</option>
             <option value="Izin">Izin</option>
             <option value="Sakit">Sakit</option>
             <option value="Alpa">Alpa</option>
@@ -110,8 +113,8 @@
         </div>
 
         <div class="form-group">
-          <label for="statusNote">Keterangan</label>
-          <input type="text" id="statusNote" class="form-control" placeholder="Opsional">
+          <label for="statusNote">Alasan penyesuaian (wajib)</label>
+          <input type="text" id="statusNote" class="form-control" minlength="5" maxlength="255" required placeholder="Contoh: siswa hadir tanpa ponsel">
         </div>
       </div>
       <div class="modal-footer">

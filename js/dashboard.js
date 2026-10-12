@@ -4,6 +4,7 @@
 
 const WARNA_STATUS = {
   Hadir: '#16a34a',
+  Terlambat: '#d97706',
   Izin:  '#7c3aed',
   Sakit: '#d97706',
   Alpa:  '#dc2626'
@@ -40,6 +41,7 @@ async function initAdminDashboard() {
   const todayRows = attendance.filter((row) => row.date === today);
 
   const hadir = todayRows.filter((r) => r.status === 'Hadir').length;
+  const terlambat = todayRows.filter((r) => r.status === 'Terlambat').length;
   const izin  = todayRows.filter((r) => r.status === 'Izin').length;
   const sakit = todayRows.filter((r) => r.status === 'Sakit').length;
   const alpa  = todayRows.filter((r) => r.status === 'Alpa').length;
@@ -48,6 +50,7 @@ async function initAdminDashboard() {
     statCard({ label: 'Total Siswa', value: students.filter((s) => s.status === 'Aktif').length, icon: 'fa-user-graduate', tone: 'primary' }),
     statCard({ label: 'Total Guru', value: teachers.filter((t) => t.status === 'Aktif').length, icon: 'fa-chalkboard-user', tone: 'info' }),
     statCard({ label: 'Hadir Hari Ini', value: hadir, icon: 'fa-circle-check', tone: 'success' }),
+    statCard({ label: 'Terlambat', value: terlambat, icon: 'fa-clock', tone: 'warning' }),
     statCard({ label: 'Izin', value: izin, icon: 'fa-file-lines', tone: 'info' }),
     statCard({ label: 'Sakit', value: sakit, icon: 'fa-notes-medical', tone: 'warning' }),
     statCard({ label: 'Alpa', value: alpa, icon: 'fa-user-xmark', tone: 'danger' })
@@ -60,7 +63,7 @@ async function initAdminDashboard() {
   for (let back = 6; back >= 0; back--) {
     const date = shiftDate(-back);
     labels.push(formatDate(date).slice(0, 6));
-    hadirTrend.push(attendance.filter((r) => r.date === date && r.status === 'Hadir').length);
+    hadirTrend.push(attendance.filter((r) => r.date === date && ['Hadir', 'Terlambat'].includes(r.status)).length);
   }
 
   renderChart('trendChart', {
@@ -94,10 +97,10 @@ async function initAdminDashboard() {
   renderChart('statusChart', {
     type: 'doughnut',
     data: {
-      labels: ['Hadir', 'Izin', 'Sakit', 'Alpa'],
+      labels: ['Hadir', 'Terlambat', 'Izin', 'Sakit', 'Alpa'],
       datasets: [{
-        data: [hadir, izin, sakit, alpa],
-        backgroundColor: ['#16a34a', '#7c3aed', '#d97706', '#dc2626'],
+        data: [hadir, terlambat, izin, sakit, alpa],
+        backgroundColor: ['#16a34a', '#d97706', '#7c3aed', '#f59e0b', '#dc2626'],
         borderWidth: 0
       }]
     },
@@ -109,6 +112,7 @@ async function initAdminDashboard() {
     }
   }, [
     { label: 'Hadir', value: hadir, color: '#16a34a' },
+    { label: 'Terlambat', value: terlambat, color: '#d97706' },
     { label: 'Izin',  value: izin,  color: '#7c3aed' },
     { label: 'Sakit', value: sakit, color: '#d97706' },
     { label: 'Alpa',  value: alpa,  color: '#dc2626' }
@@ -171,6 +175,7 @@ async function initGuruDashboard() {
   }
 
   const hadir = todayRows.filter((r) => r.status === 'Hadir').length;
+  const terlambat = todayRows.filter((r) => r.status === 'Terlambat').length;
   const izin  = todayRows.filter((r) => r.status === 'Izin').length;
   const sakit = todayRows.filter((r) => r.status === 'Sakit').length;
   const alpa  = todayRows.filter((r) => r.status === 'Alpa').length;
@@ -178,6 +183,7 @@ async function initGuruDashboard() {
   grid.innerHTML = [
     statCard({ label: 'Total Siswa', value: classStudents.length, icon: 'fa-user-graduate', tone: 'primary' }),
     statCard({ label: 'Hadir Hari Ini', value: hadir, icon: 'fa-circle-check', tone: 'success' }),
+    statCard({ label: 'Terlambat', value: terlambat, icon: 'fa-clock', tone: 'warning' }),
     statCard({ label: 'Izin', value: izin, icon: 'fa-file-lines', tone: 'info' }),
     statCard({ label: 'Sakit', value: sakit, icon: 'fa-notes-medical', tone: 'warning' }),
     statCard({ label: 'Alpa', value: alpa, icon: 'fa-user-xmark', tone: 'danger' })
@@ -191,7 +197,7 @@ async function initGuruDashboard() {
     const date = shiftDate(-back);
     labels.push(formatDate(date).slice(0, 6));
     values.push(attendance.filter((r) =>
-      r.date === date && r.status === 'Hadir' && (!className || r.className === className)
+      r.date === date && ['Hadir', 'Terlambat'].includes(r.status) && (!className || r.className === className)
     ).length);
   }
 
@@ -218,10 +224,10 @@ async function initGuruDashboard() {
   renderChart('guruStatusChart', {
     type: 'doughnut',
     data: {
-      labels: ['Hadir', 'Izin', 'Sakit', 'Alpa'],
+      labels: ['Hadir', 'Terlambat', 'Izin', 'Sakit', 'Alpa'],
       datasets: [{
-        data: [hadir, izin, sakit, alpa],
-        backgroundColor: ['#16a34a', '#7c3aed', '#d97706', '#dc2626'],
+        data: [hadir, terlambat, izin, sakit, alpa],
+        backgroundColor: ['#16a34a', '#d97706', '#7c3aed', '#f59e0b', '#dc2626'],
         borderWidth: 0
       }]
     },
@@ -233,6 +239,7 @@ async function initGuruDashboard() {
     }
   }, [
     { label: 'Hadir', value: hadir, color: '#16a34a' },
+    { label: 'Terlambat', value: terlambat, color: '#d97706' },
     { label: 'Izin',  value: izin,  color: '#7c3aed' },
     { label: 'Sakit', value: sakit, color: '#d97706' },
     { label: 'Alpa',  value: alpa,  color: '#dc2626' }
@@ -275,11 +282,12 @@ async function initSiswaDashboard() {
   const history = await API.getAttendanceByStudent(student.nis);
 
   const hadir = history.filter((r) => r.status === 'Hadir').length;
+  const terlambat = history.filter((r) => r.status === 'Terlambat').length;
   const izin  = history.filter((r) => r.status === 'Izin').length;
   const sakit = history.filter((r) => r.status === 'Sakit').length;
   const alpa  = history.filter((r) => r.status === 'Alpa').length;
   const total = history.length;
-  const persen = total > 0 ? Math.round((hadir / total) * 100) : 0;
+  const persen = total > 0 ? Math.round(((hadir + terlambat) / total) * 100) : 0;
 
   document.getElementById('studentGreeting').textContent = student.name.split(' ')[0];
 
@@ -297,6 +305,7 @@ async function initSiswaDashboard() {
 
   grid.innerHTML = [
     statCard({ label: 'Hadir', value: hadir, icon: 'fa-circle-check', tone: 'success' }),
+    statCard({ label: 'Terlambat', value: terlambat, icon: 'fa-clock', tone: 'warning' }),
     statCard({ label: 'Izin', value: izin, icon: 'fa-file-lines', tone: 'info' }),
     statCard({ label: 'Sakit', value: sakit, icon: 'fa-notes-medical', tone: 'warning' }),
     statCard({ label: 'Alpa', value: alpa, icon: 'fa-user-xmark', tone: 'danger' }),
@@ -306,10 +315,10 @@ async function initSiswaDashboard() {
   renderChart('studentStatusChart', {
     type: 'doughnut',
     data: {
-      labels: ['Hadir', 'Izin', 'Sakit', 'Alpa'],
+      labels: ['Hadir', 'Terlambat', 'Izin', 'Sakit', 'Alpa'],
       datasets: [{
-        data: [hadir, izin, sakit, alpa],
-        backgroundColor: ['#16a34a', '#7c3aed', '#d97706', '#dc2626'],
+        data: [hadir, terlambat, izin, sakit, alpa],
+        backgroundColor: ['#16a34a', '#d97706', '#7c3aed', '#f59e0b', '#dc2626'],
         borderWidth: 0
       }]
     },
@@ -321,6 +330,7 @@ async function initSiswaDashboard() {
     }
   }, [
     { label: 'Hadir', value: hadir, color: '#16a34a' },
+    { label: 'Terlambat', value: terlambat, color: '#d97706' },
     { label: 'Izin',  value: izin,  color: '#7c3aed' },
     { label: 'Sakit', value: sakit, color: '#d97706' },
     { label: 'Alpa',  value: alpa,  color: '#dc2626' }
@@ -332,7 +342,7 @@ async function initSiswaDashboard() {
   for (let back = 6; back >= 0; back--) {
     const date = shiftDate(-back);
     labels.push(formatDate(date).slice(0, 6));
-    values.push(history.filter((r) => r.date === date && r.status === 'Hadir').length);
+    values.push(history.filter((r) => r.date === date && ['Hadir', 'Terlambat'].includes(r.status)).length);
   }
 
   renderChart('studentTrendChart', {

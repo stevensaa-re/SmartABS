@@ -464,6 +464,9 @@ const LocalAdapter = (() => {
     async startAttendanceSession() {
       throw new Error('Sesi QR per mata pelajaran memerlukan backend Firebase.');
     },
+    async getActiveAttendanceSession() {
+      throw new Error('Pemulihan sesi QR memerlukan backend Firebase.');
+    },
     async rotateAttendanceSession() {
       throw new Error('Sesi QR per mata pelajaran memerlukan backend Firebase.');
     },
@@ -480,7 +483,8 @@ const LocalAdapter = (() => {
       const student = requireStudent(payload.studentId);
       const rows = readTable('attendance');
       const index = rows.findIndex(
-        (row) => row.studentId === student.nis && row.date === payload.date
+        (row) => row.studentId === student.nis && row.date === payload.date &&
+          String(row.subject || '') === String(payload.subject || '')
       );
 
       /* Nama & kelas selalu diambil dari data induk siswa */
@@ -497,7 +501,7 @@ const LocalAdapter = (() => {
         return rows[index];
       }
 
-      const record = { id: `A-${data.date}-${student.nis}`, note: '', time: currentTime(), ...data };
+      const record = { id: makeId('A'), note: '', time: currentTime(), ...data };
       rows.push(record);
       writeTable('attendance', rows);
       return record;
@@ -584,7 +588,7 @@ const LocalAdapter = (() => {
 
     /* ---------------- REPORTS ---------------- */
 
-    async getReport({ from, to, className, status } = {}) {
+    async getReport({ from, to, className, subject, status } = {}) {
       await delay();
 
       const students = readTable('students').filter(
@@ -595,6 +599,7 @@ const LocalAdapter = (() => {
         if (from && row.date < from) return false;
         if (to && row.date > to) return false;
         if (className && row.className !== className) return false;
+        if (subject && row.subject !== subject) return false;
         if (status && row.status !== status) return false;
         return true;
       });

@@ -32,7 +32,7 @@ const API_CONTRACT = [
   'getAttendanceByStudentDate', 'saveAttendance', 'deleteAttendance',
   'getAttendanceForStudentDate',
   'startAttendanceSession', 'rotateAttendanceSession', 'closeAttendanceSession',
-  'submitQrAttendance',
+  'getActiveAttendanceSession', 'submitQrAttendance',
   /* permissions */
   'getPermissions', 'getPermissionsByStudent', 'createPermission', 'reviewPermission',
   /* reports */
@@ -70,18 +70,19 @@ function buildReport(students, attendance) {
     const rows = attendance.filter((row) => row.studentId === student.nis);
 
     const hadir = rows.filter((r) => r.status === 'Hadir').length;
+    const terlambat = rows.filter((r) => r.status === 'Terlambat').length;
     const izin  = rows.filter((r) => r.status === 'Izin').length;
     const sakit = rows.filter((r) => r.status === 'Sakit').length;
     const alpa  = rows.filter((r) => r.status === 'Alpa').length;
-    const total = hadir + izin + sakit + alpa;
+    const total = hadir + terlambat + izin + sakit + alpa;
 
     return {
       nis: student.nis,
       name: student.name,
       className: student.className,
-      hadir, izin, sakit, alpa,
+      hadir, terlambat, izin, sakit, alpa,
       total,
-      percentage: total > 0 ? Math.round((hadir / total) * 100) : 0
+      percentage: total > 0 ? Math.round(((hadir + terlambat) / total) * 100) : 0
     };
   });
 

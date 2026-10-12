@@ -141,12 +141,12 @@ const MysqlAdapter = (() => {
     getAttendanceByStudent:     (nis)                        => get(`/attendance/student/${enc(nis)}`),
     getAttendanceByStudentDate: (nis, date)                  => get(`/attendance/student/${enc(nis)}/date/${enc(date)}`),
     getAttendanceForStudentDate: async (nis, date) => {
-      const record = await get(`/attendance/student/${enc(nis)}/date/${enc(date)}`);
-      return record ? [record] : [];
+      return get(`/attendance/student/${enc(nis)}/date/${enc(date)}/all`);
     },
     saveAttendance:             (payload)                    => post('/attendance', payload),
     deleteAttendance:           (id)                         => del(`/attendance/${enc(id)}`).then(() => true),
     startAttendanceSession:     async () => { throw new Error('Sesi QR per mata pelajaran memerlukan backend Firebase.'); },
+    getActiveAttendanceSession: async () => { throw new Error('Pemulihan sesi QR memerlukan backend Firebase.'); },
     rotateAttendanceSession:    async () => { throw new Error('Sesi QR per mata pelajaran memerlukan backend Firebase.'); },
     closeAttendanceSession:     async () => { throw new Error('Sesi QR per mata pelajaran memerlukan backend Firebase.'); },
     submitQrAttendance:         async () => { throw new Error('Absensi QR per mata pelajaran memerlukan backend Firebase.'); },
@@ -160,8 +160,8 @@ const MysqlAdapter = (() => {
 
     /* ---------------- REPORTS ---------------- */
 
-    getReport: ({ from, to, className, status } = {}) =>
-      get(`/reports${query({ from, to, className, status })}`),
+    getReport: ({ from, to, className, subject, status } = {}) =>
+      get(`/reports${query({ from, to, className, subject, status })}`),
 
     async resetDatabase() {
       throw new Error('Reset database hanya tersedia pada mode local.');

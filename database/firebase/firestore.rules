@@ -52,11 +52,13 @@ service cloud.firestore {
       return isSiswa()
         && request.resource.data.keys().hasAll([
           'sessionId', 'sessionToken', 'scheduleId', 'subject', 'studentId',
-          'name', 'className', 'date', 'time', 'status', 'note', 'createdAt'
+          'name', 'className', 'date', 'time', 'status', 'note', 'createdAt',
+          'sessionStartedAt', 'source'
         ])
         && request.resource.data.keys().hasOnly([
           'sessionId', 'sessionToken', 'scheduleId', 'subject', 'studentId',
-          'name', 'className', 'date', 'time', 'status', 'note', 'createdAt'
+          'name', 'className', 'date', 'time', 'status', 'note', 'createdAt',
+          'sessionStartedAt', 'source'
         ])
         && exists(/databases/$(database)/documents/attendanceSessions/$(request.resource.data.sessionId))
         && qrSession(request.resource.data.sessionId).active == true
@@ -70,9 +72,42 @@ service cloud.firestore {
         && request.resource.data.className == myClassName()
         && request.resource.data.name == get(/databases/$(database)/documents/students/$(myNis())).data.name
         && request.resource.data.status == 'Hadir'
+        && request.resource.data.source == 'qr'
         && request.resource.data.time == request.time
         && request.resource.data.createdAt == request.time
+        && request.resource.data.sessionStartedAt == qrSession(request.resource.data.sessionId).createdAt
         && id == request.resource.data.sessionId + '_' + myNis();
+    }
+    function hasAttendanceHistory(id) {
+      return request.resource.data.lastChangeId is string
+        && request.resource.data.updatedAt == request.time
+        && existsAfter(/databases/$(database)/documents/attendance/$(id)/history/$(request.resource.data.lastChangeId))
+        && getAfter(/databases/$(database)/documents/attendance/$(id)/history/$(request.resource.data.lastChangeId)).data.actorUid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/attendance/$(id)/history/$(request.resource.data.lastChangeId)).data.studentId == request.resource.data.studentId
+        && getAfter(/databases/$(database)/documents/attendance/$(id)/history/$(request.resource.data.lastChangeId)).data.className == request.resource.data.className
+        && getAfter(/databases/$(database)/documents/attendance/$(id)/history/$(request.resource.data.lastChangeId)).data.date == request.resource.data.date
+        && getAfter(/databases/$(database)/documents/attendance/$(id)/history/$(request.resource.data.lastChangeId)).data.nextStatus == request.resource.data.status
+        && getAfter(/databases/$(database)/documents/attendance/$(id)/history/$(request.resource.data.lastChangeId)).data.nextNote == request.resource.data.note
+        && getAfter(/databases/$(database)/documents/attendance/$(id)/history/$(request.resource.data.lastChangeId)).data.createdAt == request.time;
+    }
+    function validManualAttendance(id) {
+      return isStaff()
+        && (isAdmin() || enrolledIn(request.resource.data.studentId, request.resource.data.className))
+        && (isAdmin() || teaches(request.resource.data.className))
+        && request.resource.data.status in ['Hadir', 'Terlambat', 'Izin', 'Sakit', 'Alpa']
+        && request.resource.data.createdAt == request.time
+        && (
+          (id == request.resource.data.date + '_' + request.resource.data.studentId
+            && !request.resource.data.keys().hasAny(['sessionId']))
+          || (request.resource.data.sessionId is string
+            && id == request.resource.data.sessionId + '_' + request.resource.data.studentId
+            && exists(/databases/$(database)/documents/attendanceSessions/$(request.resource.data.sessionId))
+            && qrSession(request.resource.data.sessionId).date == request.resource.data.date
+            && qrSession(request.resource.data.sessionId).className == request.resource.data.className
+            && qrSession(request.resource.data.sessionId).scheduleId == request.resource.data.scheduleId
+            && qrSession(request.resource.data.sessionId).subject == request.resource.data.subject)
+        )
+        && hasAttendanceHistory(id);
     }
 
     // ---------- users ----------
@@ -124,24 +159,42 @@ service cloud.firestore {
         || (isSiswa() && (resource.data.studentId == myNis()
           || id.matches('.*_' + myNis())));
 
-      allow create: if (isAdmin() || teaches(request.resource.data.className))
-        && request.resource.data.status in ['Hadir', 'Izin', 'Sakit', 'Alpa']
-        && request.resource.data.createdAt == request.time
-        && id == request.resource.data.date + '_' + request.resource.data.studentId
-        && (isAdmin() || enrolledIn(request.resource.data.studentId, request.resource.data.className));
-      allow update: if isAdmin() || (teaches(resource.data.className)
-        && teaches(request.resource.data.className)
-        && request.resource.data.status in ['Hadir', 'Izin', 'Sakit', 'Alpa']
-        && request.resource.data.createdAt == request.time
+      allow create: if validManualAttendance(id) || validQrAttendance(id);
+      allow update: if validManualAttendance(id)
+        && resource.data.studentId == request.resource.data.studentId
+        && resource.data.date == request.resource.data.date
+        && (isAdmin() || teaches(resource.data.className))
         && request.resource.data.studentId == resource.data.studentId
-        && request.resource.data.date == resource.data.date
-        && id == request.resource.data.date + '_' + request.resource.data.studentId
-        && enrolledIn(request.resource.data.studentId, request.resource.data.className));
-      allow delete: if isAdmin() || teaches(resource.data.className);
+        && request.resource.data.className == resource.data.className;
+      allow delete: if false;
 
       // Absensi QR: satu dokumen per siswa per sesi, divalidasi terhadap token
       // aktif di server Rules menggunakan request.time, bukan jam perangkat siswa.
-      allow create: if validQrAttendance(id);
+      match /history/{changeId} {
+        allow read: if isAdmin()
+          || (exists(/databases/$(database)/documents/attendance/$(id))
+            && (teaches(get(/databases/$(database)/documents/attendance/$(id)).data.className)
+              || (isSiswa() && get(/databases/$(database)/documents/attendance/$(id)).data.studentId == myNis())));
+        allow create: if isStaff()
+          && request.resource.data.actorUid == request.auth.uid
+          && request.resource.data.reason is string
+          && request.resource.data.reason.size() >= 5
+          && request.resource.data.createdAt == request.time
+          && existsAfter(/databases/$(database)/documents/attendance/$(id))
+          && getAfter(/databases/$(database)/documents/attendance/$(id)).data.lastChangeId == changeId
+          && getAfter(/databases/$(database)/documents/attendance/$(id)).data.studentId == request.resource.data.studentId
+          && getAfter(/databases/$(database)/documents/attendance/$(id)).data.className == request.resource.data.className
+          && getAfter(/databases/$(database)/documents/attendance/$(id)).data.date == request.resource.data.date
+          && getAfter(/databases/$(database)/documents/attendance/$(id)).data.status == request.resource.data.nextStatus
+          && getAfter(/databases/$(database)/documents/attendance/$(id)).data.note == request.resource.data.nextNote
+          && (isAdmin() || teaches(request.resource.data.className))
+          && (exists(/databases/$(database)/documents/attendance/$(id))
+            ? request.resource.data.previousStatus == get(/databases/$(database)/documents/attendance/$(id)).data.status
+              && request.resource.data.previousNote == get(/databases/$(database)/documents/attendance/$(id)).data.get('note', '')
+            : request.resource.data.previousStatus == ''
+              && request.resource.data.previousNote == '');
+        allow update, delete: if false;
+      }
     }
 
     // ---------- sesi QR absensi ----------

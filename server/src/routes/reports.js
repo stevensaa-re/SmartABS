@@ -10,12 +10,13 @@ router.get('/', asyncHandler(async (req, res) => {
   const from = str(req.query.from);
   const to = str(req.query.to);
   const className = str(req.query.className);
+  const subject = str(req.query.subject);
   const status = str(req.query.status);
 
   if (from) assert(isValidDate(from), 'Tanggal "dari" tidak valid.');
   if (to) assert(isValidDate(to), 'Tanggal "sampai" tidak valid.');
   if (from && to) assert(from <= to, 'Tanggal "dari" tidak boleh melebihi "sampai".');
-  if (status) assert(oneOf(status, ['Hadir', 'Izin', 'Sakit', 'Alpa']), 'Status tidak valid.');
+  if (status) assert(oneOf(status, ['Hadir', 'Terlambat', 'Izin', 'Sakit', 'Alpa']), 'Status tidak valid.');
 
   /* Filter periode & status ditaruh pada JOIN agar siswa tanpa data tetap muncul (0 hari) */
   const joinConditions = ['a.student_nis = s.nis'];
@@ -23,6 +24,7 @@ router.get('/', asyncHandler(async (req, res) => {
 
   if (from) { joinConditions.push('a.`date` >= ?'); params.push(from); }
   if (to)   { joinConditions.push('a.`date` <= ?'); params.push(to); }
+  if (subject) { joinConditions.push('a.subject = ?'); params.push(subject); }
   if (status) { joinConditions.push('a.status = ?'); params.push(status); }
 
   const where = ["s.status = 'Aktif'"];
@@ -31,6 +33,7 @@ router.get('/', asyncHandler(async (req, res) => {
   const rows = await query(
     `SELECT s.nis, s.name, c.name AS className,
             COALESCE(SUM(a.status = 'Hadir'), 0) AS hadir,
+            COALESCE(SUM(a.status = 'Terlambat'), 0) AS terlambat,
             COALESCE(SUM(a.status = 'Izin'),  0) AS izin,
             COALESCE(SUM(a.status = 'Sakit'), 0) AS sakit,
             COALESCE(SUM(a.status = 'Alpa'),  0) AS alpa
@@ -44,12 +47,13 @@ router.get('/', asyncHandler(async (req, res) => {
   );
 
   res.json(rows.map((row) => {
-    const hadir = Number(row.hadir), izin = Number(row.izin), sakit = Number(row.sakit), alpa = Number(row.alpa);
-    const total = hadir + izin + sakit + alpa;
+    const hadir = Number(row.hadir), terlambat = Number(row.terlambat);
+    const izin = Number(row.izin), sakit = Number(row.sakit), alpa = Number(row.alpa);
+    const total = hadir + terlambat + izin + sakit + alpa;
     return {
       nis: row.nis, name: row.name, className: row.className,
-      hadir, izin, sakit, alpa, total,
-      percentage: total > 0 ? Math.round((hadir / total) * 100) : 0
+      hadir, terlambat, izin, sakit, alpa, total,
+      percentage: total > 0 ? Math.round(((hadir + terlambat) / total) * 100) : 0
     };
   }));
 }));
