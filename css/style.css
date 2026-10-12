@@ -420,6 +420,7 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   font-size: 13.5px;
   margin-bottom: 14px;
 }
+.alert[hidden] { display: none; }
 .alert-danger { background: var(--danger-soft); color: #b91c1c; }
 .alert-success { background: var(--success-soft); color: #15803d; }
 .alert-info { background: var(--primary-soft); color: var(--primary-dark); }

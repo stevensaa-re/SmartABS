@@ -31,6 +31,10 @@
       <form id="schoolForm" class="card">
         <div class="card-header"><h3>Identitas sekolah</h3></div>
         <div class="card-body">
+          <div class="alert alert-info">
+            Setelah disimpan, nama sekolah tampil di bagian atas halaman. Jenjang dan jurusan akan
+            menjadi pilihan pada formulir Data Kelas; menu dan tata letak aplikasi tidak berubah.
+          </div>
           <div class="form-group">
             <label for="schoolName">Nama sekolah <span class="req">*</span></label>
             <input class="form-control" id="schoolName" required maxlength="160">
@@ -51,6 +55,16 @@
             <label for="schoolMajors">Jurusan SMA/SMK</label>
             <input class="form-control" id="schoolMajors" placeholder="IPA, IPS, RPL, TKJ">
             <small class="text-muted">Pisahkan dengan koma. SD/SMP tidak memerlukan jurusan.</small>
+          </div>
+          <div class="alert alert-info" id="schoolImpactNotice" hidden></div>
+          <div class="card" aria-live="polite">
+            <div class="card-header"><h3>Pratinjau identitas</h3></div>
+            <div class="card-body">
+              <strong id="schoolPreviewName">Nama sekolah</strong>
+              <p id="schoolPreviewAddress" class="text-muted">Alamat sekolah</p>
+              <p id="schoolPreviewLevels" class="text-muted"></p>
+              <p id="schoolPreviewMajors" class="text-muted"></p>
+            </div>
           </div>
           <button class="btn btn-primary" id="saveSchool" type="submit">
             <i class="fa-solid fa-floppy-disk"></i> Simpan profil

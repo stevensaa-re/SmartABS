@@ -9,7 +9,8 @@ tersedia di bawah tidak boleh dianggap sudah siap dipakai.
 ## Fitur
 
 - Akses sesuai peran: admin, guru, dan siswa.
-- Pengaturan profil untuk satu sekolah: nama, alamat, telepon, jenjang, dan jurusan.
+- Pengaturan profil untuk satu sekolah: nama, alamat, telepon, jenjang, dan jurusan. Nama sekolah
+  tampil pada identitas halaman; jenjang dan jurusan yang dipilih menjadi opsi saat mengelola kelas.
 - Pengelolaan kelas, siswa, guru, akun, jadwal pelajaran, dan pengumuman.
 - Biodata siswa meliputi NIS/NISN, kelas, jenis kelamin, tempat/tanggal lahir, alamat,
   nama orang tua/wali, dan kontak wali.

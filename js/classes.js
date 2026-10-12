@@ -77,6 +77,32 @@ function renderKelas() {
     button.addEventListener('click', () => hapusKelas(button.dataset.id)));
 }
 
+function renderClassOptions(selectedGrade, selectedMajor) {
+  const educationSelect = document.getElementById('classEducationLevel');
+  if (!educationSelect) return;
+  const levels = (konfigurasiSekolah.educationLevels || [])
+    .filter((level) => ['SD', 'SMP', 'SMA', 'SMK'].includes(level));
+  educationSelect.innerHTML = levels
+    .map((level) => `<option value="${escapeHtml(level)}">${escapeHtml(level)}</option>`).join('');
+  if (!levels.includes(educationSelect.value)) educationSelect.value = levels[0] || 'SMA';
+
+  const educationLevel = educationSelect.value;
+  const grades = educationLevel === 'SD' ? Array.from({ length: 6 }, (_, i) => String(i + 1))
+    : educationLevel === 'SMP' ? ['7', '8', '9'] : ['X', 'XI', 'XII'];
+  const gradeSelect = document.getElementById('classLevel');
+  gradeSelect.innerHTML = grades.map((grade) => `<option value="${grade}">${grade}</option>`).join('');
+  if (selectedGrade && grades.includes(selectedGrade)) gradeSelect.value = selectedGrade;
+
+  const majorSelect = document.getElementById('classMajor');
+  const majors = ['SMA', 'SMK'].includes(educationLevel) ? (konfigurasiSekolah.majors || []) : [];
+  const majorOptions = [...majors];
+  if (selectedMajor && !majorOptions.includes(selectedMajor)) majorOptions.push(selectedMajor);
+  majorSelect.innerHTML = ['<option value="">Tanpa jurusan</option>', ...majorOptions.map((major) =>
+    `<option value="${escapeHtml(major)}">${escapeHtml(major)}</option>`)].join('');
+  majorSelect.disabled = !majorOptions.length;
+  majorSelect.value = majorOptions.includes(selectedMajor) ? selectedMajor : '';
+}
+
 function openClassForm(id = null) {
   const form = document.getElementById('classForm');
   form.reset();
@@ -124,30 +150,6 @@ async function simpanKelas(event) {
     } else {
       await API.createClass(payload);
       Toast.success('Kelas baru berhasil ditambahkan.');
-    }
-
-    function renderClassOptions(selectedGrade, selectedMajor) {
-      const educationSelect = document.getElementById('classEducationLevel');
-      if (!educationSelect) return;
-      const levels = (konfigurasiSekolah.educationLevels || []).filter((level) => ['SD', 'SMP', 'SMA', 'SMK'].includes(level));
-      educationSelect.innerHTML = levels.map((level) => `<option value="${escapeHtml(level)}">${escapeHtml(level)}</option>`).join('');
-      if (!levels.includes(educationSelect.value)) educationSelect.value = levels[0] || 'SMA';
-
-      const educationLevel = educationSelect.value;
-      const grades = educationLevel === 'SD' ? Array.from({ length: 6 }, (_, i) => String(i + 1))
-        : educationLevel === 'SMP' ? ['7', '8', '9'] : ['X', 'XI', 'XII'];
-      const gradeSelect = document.getElementById('classLevel');
-      gradeSelect.innerHTML = grades.map((grade) => `<option value="${grade}">${grade}</option>`).join('');
-      if (selectedGrade && grades.includes(selectedGrade)) gradeSelect.value = selectedGrade;
-
-      const majorSelect = document.getElementById('classMajor');
-      const majors = ['SMA', 'SMK'].includes(educationLevel) ? (konfigurasiSekolah.majors || []) : [];
-      const majorOptions = [...majors];
-      if (selectedMajor && !majorOptions.includes(selectedMajor)) majorOptions.push(selectedMajor);
-      majorSelect.innerHTML = ['<option value="">Tanpa jurusan</option>', ...majorOptions.map((major) =>
-        `<option value="${escapeHtml(major)}">${escapeHtml(major)}</option>`)].join('');
-      majorSelect.disabled = !majorOptions.length;
-      majorSelect.value = majorOptions.includes(selectedMajor) ? selectedMajor : '';
     }
 
     daftarKelasAdmin = await API.getClasses();
