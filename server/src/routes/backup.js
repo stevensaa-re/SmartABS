@@ -13,8 +13,11 @@ const safeArray = (data, key) => {
 router.use(requireRole('admin'));
 router.get('/', asyncHandler(async (_req, res) => {
   const [classes, students, teachers, schedules, announcements, attendance, permissions, calendarEvents] = await Promise.all([
-    query('SELECT id, name, level, major, homeroom, capacity FROM classes'),
-    query(`SELECT s.nis, s.name, c.name AS className, s.gender, s.status, '' AS userId, s.phone
+    query('SELECT id, name, education_level AS educationLevel, level, major, homeroom, capacity FROM classes'),
+    query(`SELECT s.nis, s.name, COALESCE(s.nisn, '') AS nisn, c.name AS className,
+      s.gender, s.status, '' AS userId, s.phone, s.birth_place AS birthPlace,
+      DATE_FORMAT(s.birth_date, '%Y-%m-%d') AS birthDate, s.address,
+      s.father_name AS fatherName, s.mother_name AS motherName, s.guardian_name AS guardianName
       FROM students s JOIN classes c ON c.id = s.class_id`),
     query(`SELECT t.id, u.username, t.name, t.subject, COALESCE(c.name, '') AS className, t.status
       FROM teachers t JOIN users u ON u.id = t.user_id LEFT JOIN classes c ON c.id = t.class_id`),
@@ -58,16 +61,29 @@ router.post('/restore', asyncHandler(async (req, res) => {
 
     for (const item of safeArray(backup.data, 'classes')) {
       assert(item.id && item.name && item.level && item.major, 'Backup memiliki data kelas yang tidak lengkap.');
-      await insert('classes', ['id', 'name', 'level', 'major', 'homeroom', 'capacity'],
-        [String(item.id), String(item.name), String(item.level), String(item.major), String(item.homeroom || ''), Number(item.capacity) || 36]);
+      await insert('classes', ['id', 'name', 'education_level', 'level', 'major', 'homeroom', 'capacity'],
+        [String(item.id), String(item.name),
+          oneOf(item.educationLevel, ['SD', 'SMP', 'SMA', 'SMK']) ? item.educationLevel : 'SMA',
+          String(item.level), String(item.major), String(item.homeroom || ''), Number(item.capacity) || 36]);
     }
     for (const item of safeArray(backup.data, 'students')) {
       assert(/^\d{4,20}$/.test(String(item.nis || '')) && item.name && item.className, 'Backup memiliki data siswa yang tidak valid.');
+      if ((item.nisn && !/^\d{10}$/.test(String(item.nisn))) ||
+          (item.birthDate && !isValidDate(String(item.birthDate)))) { counters.skipped++; continue; }
       const id = await classId(item.className);
       if (!id) { counters.skipped++; continue; }
-      await insert('students', ['nis', 'name', 'class_id', 'gender', 'status', 'user_id', 'phone'],
-        [String(item.nis), String(item.name), id, oneOf(item.gender, ['L', 'P']) ? item.gender : 'L',
-          oneOf(item.status, ['Aktif', 'Nonaktif']) ? item.status : 'Aktif', null, String(item.phone || '')]);
+      await insert('students', [
+        'nis', 'name', 'nisn', 'class_id', 'gender', 'status', 'user_id', 'phone',
+        'birth_place', 'birth_date', 'address', 'father_name', 'mother_name', 'guardian_name'
+      ], [
+        String(item.nis), String(item.name), item.nisn || null, id,
+        oneOf(item.gender, ['L', 'P']) ? item.gender : 'L',
+        oneOf(item.status, ['Aktif', 'Nonaktif']) ? item.status : 'Aktif', null,
+        String(item.phone || '').slice(0, 30), String(item.birthPlace || '').slice(0, 100),
+        item.birthDate || null, String(item.address || '').slice(0, 500),
+        String(item.fatherName || '').slice(0, 100), String(item.motherName || '').slice(0, 100),
+        String(item.guardianName || '').slice(0, 100)
+      ]);
     }
     for (const item of safeArray(backup.data, 'teachers')) {
       assert(item.id && item.username && item.name, 'Backup memiliki data guru yang tidak valid.');

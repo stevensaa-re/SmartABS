@@ -128,6 +128,19 @@ function renderLayout() {
   if (sidebar) sidebar.innerHTML = sidebarHTML(session, page);
   if (navbar)  navbar.innerHTML = navbarHTML(session, pageInfo);
 
+  if (navbar && !session.schoolName) {
+    API.getSchoolProfile().then((school) => {
+      const current = Session.get();
+      if (!school.name || !current || current.id !== session.id) return;
+      current.schoolName = school.name;
+      Session.set(current, current.remember);
+      const subtitle = navbar.querySelector('.navbar-title p');
+      if (subtitle) subtitle.textContent = `${school.name} · Smart Attendance System`;
+    }).catch((error) => {
+      console.error('Gagal memuat nama sekolah untuk navbar:', error);
+    });
+  }
+
   document.title = `${pageInfo.label} — SMARTABS`;
 
   bindLayoutEvents();

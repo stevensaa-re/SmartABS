@@ -89,6 +89,9 @@ const MysqlAdapter = (() => {
 
     async logout() { return true; },
 
+    getSchoolProfile: () => get('/school'),
+    updateSchoolProfile: (payload) => put('/school', payload),
+
     /* ---------------- USERS ---------------- */
 
     getUsers:   ()            => get('/users'),

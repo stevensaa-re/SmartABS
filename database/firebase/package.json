@@ -4,8 +4,7 @@
   "main": "seed.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "migrate:school": "node migrate-single-school.cjs",
-    "test:tenant-rules": "node tenant-rules-smoke.cjs"
+    "test:single-school-rules": "node single-school-smoke.cjs"
   },
   "keywords": [],
   "author": "",

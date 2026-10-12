@@ -101,7 +101,8 @@ function ambilSiswaTerfilter() {
     const cocokKeyword =
       !keyword ||
       siswa.name.toLowerCase().includes(keyword) ||
-      siswa.nis.toLowerCase().includes(keyword);
+      siswa.nis.toLowerCase().includes(keyword) ||
+      String(siswa.nisn || '').toLowerCase().includes(keyword);
     const cocokKelas = !kelas || siswa.className === kelas;
     const cocokStatus = !status || siswa.status === status;
     return cocokKeyword && cocokKelas && cocokStatus;
@@ -156,7 +157,7 @@ function openStudentForm(nis = null) {
   const form = document.getElementById('studentForm');
   form.reset();
 
-  ['errStudentNis', 'errStudentName'].forEach((id) => {
+  ['errStudentNis', 'errStudentName', 'errStudentNisn'].forEach((id) => {
     document.getElementById(id).textContent = '';
   });
 
@@ -172,6 +173,13 @@ function openStudentForm(nis = null) {
       document.getElementById('studentName').value = siswa.name;
       document.getElementById('studentClass').value = siswa.className;
       document.getElementById('studentGender').value = siswa.gender;
+      document.getElementById('studentNisn').value = siswa.nisn || '';
+      document.getElementById('studentBirthPlace').value = siswa.birthPlace || '';
+      document.getElementById('studentBirthDate').value = siswa.birthDate || '';
+      document.getElementById('studentAddress').value = siswa.address || '';
+      document.getElementById('studentFatherName').value = siswa.fatherName || '';
+      document.getElementById('studentMotherName').value = siswa.motherName || '';
+      document.getElementById('studentGuardianName').value = siswa.guardianName || '';
       document.getElementById('studentStatus').value = siswa.status;
       document.getElementById('studentPhone').value = siswa.phone || '';
       document.getElementById('studentUser').value = siswa.userId || '';
@@ -191,6 +199,13 @@ async function simpanSiswa(event) {
   const name     = document.getElementById('studentName').value.trim();
   const className = document.getElementById('studentClass').value;
   const gender   = document.getElementById('studentGender').value;
+  const nisn = document.getElementById('studentNisn').value.trim();
+  const birthPlace = document.getElementById('studentBirthPlace').value.trim();
+  const birthDate = document.getElementById('studentBirthDate').value;
+  const address = document.getElementById('studentAddress').value.trim();
+  const fatherName = document.getElementById('studentFatherName').value.trim();
+  const motherName = document.getElementById('studentMotherName').value.trim();
+  const guardianName = document.getElementById('studentGuardianName').value.trim();
   const status   = document.getElementById('studentStatus').value;
   const phone    = document.getElementById('studentPhone').value.trim();
   const userId   = document.getElementById('studentUser').value;
@@ -199,13 +214,18 @@ async function simpanSiswa(event) {
   let valid = true;
   document.getElementById('errStudentNis').textContent = '';
   document.getElementById('errStudentName').textContent = '';
+  document.getElementById('errStudentNisn').textContent = '';
 
-  if (!/^\d{4,}$/.test(nis)) {
-    document.getElementById('errStudentNis').textContent = 'NIS harus berupa angka minimal 4 digit.';
+  if (!/^\d{4,20}$/.test(nis)) {
+    document.getElementById('errStudentNis').textContent = 'NIS harus berupa 4–20 angka.';
     valid = false;
   }
   if (name.length < 3) {
     document.getElementById('errStudentName').textContent = 'Nama minimal 3 karakter.';
+    valid = false;
+  }
+  if (nisn && !/^\d{10}$/.test(nisn)) {
+    document.getElementById('errStudentNisn').textContent = 'NISN harus terdiri dari 10 angka.';
     valid = false;
   }
   if (!className || !daftarKelas.some((kelas) => kelas.name === className)) {
@@ -221,7 +241,10 @@ async function simpanSiswa(event) {
   button.textContent = 'Menyimpan...';
 
   try {
-    const payload = { nis, name, className, gender, status, phone, userId };
+    const payload = {
+      nis, nisn, name, className, gender, status, phone, userId,
+      birthPlace, birthDate, address, fatherName, motherName, guardianName
+    };
 
     if (mode) {
       await API.updateStudent(mode, payload);
@@ -309,8 +332,36 @@ async function tampilkanDetail(nis) {
       </div>
     </div>
     <div class="form-group">
-      <label>No. HP Wali</label>
+      <label>No. HP Orang Tua/Wali</label>
       <div class="modal-info">${escapeHtml(siswa.phone || '-')}</div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>NISN</label>
+        <div class="modal-info">${escapeHtml(siswa.nisn || '-')}</div>
+      </div>
+      <div class="form-group">
+        <label>Tempat, Tanggal Lahir</label>
+        <div class="modal-info">${escapeHtml([siswa.birthPlace, siswa.birthDate].filter(Boolean).join(', ') || '-')}</div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Alamat</label>
+      <div class="modal-info">${escapeHtml(siswa.address || '-')}</div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Nama Ayah</label>
+        <div class="modal-info">${escapeHtml(siswa.fatherName || '-')}</div>
+      </div>
+      <div class="form-group">
+        <label>Nama Ibu</label>
+        <div class="modal-info">${escapeHtml(siswa.motherName || '-')}</div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Nama Wali</label>
+      <div class="modal-info">${escapeHtml(siswa.guardianName || '-')}</div>
     </div>
     <div class="form-group">
       <label>Ringkasan Kehadiran (${total} hari)</label>

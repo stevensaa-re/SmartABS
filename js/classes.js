@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const [classes, students] = await Promise.all([API.getClasses(), API.getStudents()]);
     daftarKelasAdmin = classes;
     daftarSiswaKelas = students;
-    if (APP_CONFIG.BACKEND === 'firebase') konfigurasiSekolah = await API.getSchoolProfile();
+    konfigurasiSekolah = await API.getSchoolProfile();
   } catch (error) {
     Toast.error(error.message || 'Data kelas gagal dimuat.');
     return;

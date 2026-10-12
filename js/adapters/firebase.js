@@ -25,7 +25,6 @@ const FirebaseAdapter = (() => {
   let db = null;
   let auth = null;
   let initPromise = null;
-  let activeSchoolId = '';
   const sessionClockOffsets = new Map();
 
   /* ---------- Pemuatan SDK ---------- */
@@ -69,11 +68,6 @@ const FirebaseAdapter = (() => {
         const unsubscribe = auth.onAuthStateChanged(() => { unsubscribe(); resolve(); });
       });
 
-      if (auth.currentUser) {
-        const profile = await db.collection('users').doc(auth.currentUser.uid).get();
-        activeSchoolId = profile.exists ? String(profile.data().schoolId || '') : '';
-      }
-
       /* Sesi aplikasi masih ada tetapi sesi Firebase hilang -> login ulang */
       const onLoginPage = !!document.getElementById('loginForm');
       if (!auth.currentUser && Session.get() && !onLoginPage) {
@@ -108,11 +102,7 @@ const FirebaseAdapter = (() => {
   };
   const fromSnap = (snap) => snap.docs.map(fromDoc);
   const byDateDesc = (a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0);
-  const col = (name) => {
-    if (name === 'users') return db.collection(name);
-    if (!activeSchoolId) throw new Error('Akun belum terhubung ke sekolah. Hubungi administrator.');
-    return db.collection('schools').doc(activeSchoolId).collection(name);
-  };
+  const col = (name) => db.collection(name);
   const createQrToken = () => crypto.randomUUID().replace(/-/g, '');
 
   async function writeAudit(entry) {
@@ -175,6 +165,31 @@ const FirebaseAdapter = (() => {
     const classes = await col('classes').where('name', '==', normalized).limit(1).get();
     if (classes.empty) throw new Error('Kelas tidak ditemukan. Buat atau pilih kelas yang tersedia.');
     return normalized;
+  }
+
+  function studentDetails(payload, { includeDefaults = false } = {}) {
+    const lengths = {
+      nisn: 10, birthPlace: 100, birthDate: 10, address: 500,
+      fatherName: 100, motherName: 100, guardianName: 100, phone: 30
+    };
+    const details = {};
+    Object.entries(lengths).forEach(([key, maxLength]) => {
+      if (!includeDefaults && payload[key] === undefined) return;
+      const value = String(payload[key] || '').trim();
+      if (value.length > maxLength) throw new Error(`${key} melebihi batas ${maxLength} karakter.`);
+      details[key] = value;
+    });
+    if (details.nisn && !/^\d{10}$/.test(details.nisn)) {
+      throw new Error('NISN harus terdiri dari 10 angka.');
+    }
+    if (details.birthDate) {
+      const date = new Date(`${details.birthDate}T00:00:00.000Z`);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(details.birthDate) || Number.isNaN(date.getTime()) ||
+        date.toISOString().slice(0, 10) !== details.birthDate) {
+        throw new Error('Tanggal lahir tidak valid.');
+      }
+    }
+    return details;
   }
 
   async function assignedClassName() {
@@ -248,37 +263,28 @@ const FirebaseAdapter = (() => {
         await auth.signOut();
         return { ok: false, message: 'Akun Anda tidak aktif. Hubungi administrator.' };
       }
-      activeSchoolId = String(profile.schoolId || '');
-      if (!activeSchoolId) {
-        await auth.signOut();
-        return { ok: false, message: 'Akun belum terhubung ke sekolah. Administrator perlu menyiapkan/migrasikan data sekolah.' };
-      }
-      const school = await db.collection('schools').doc(activeSchoolId).get();
-      if (!school.exists || school.data().status !== 'Aktif') {
-        await auth.signOut();
-        activeSchoolId = '';
-        return { ok: false, message: 'Sekolah tidak ditemukan atau tidak aktif. Hubungi administrator.' };
-      }
       return {
         ok: true,
-        user: {
-          id: snap.id, name: profile.name, username: profile.username,
-          email: credential.user.email, role: profile.role,
-          schoolId: activeSchoolId, schoolName: school.data().name
-        }
+        user: { id: snap.id, name: profile.name, username: profile.username, email: credential.user.email, role: profile.role }
       };
     },
 
     async logout() {
-      try { await init(); await auth.signOut(); } catch (error) { /* Firebase logout is best effort. */ }
-      activeSchoolId = '';
+      try { await init(); await auth.signOut(); } catch (error) { /* abaikan */ }
       return true;
     },
 
     getSchoolProfile: () => run(async () => {
-      const snap = await db.collection('schools').doc(activeSchoolId).get();
-      if (!snap.exists || snap.data().status !== 'Aktif') throw new Error('Profil sekolah tidak ditemukan atau tidak aktif.');
-      return { id: snap.id, ...snap.data() };
+      const snap = await db.collection('schoolSettings').doc('main').get();
+      return {
+        id: 'main',
+        name: snap.exists ? String(snap.data().name || '') : '',
+        address: snap.exists ? String(snap.data().address || '') : '',
+        phone: snap.exists ? String(snap.data().phone || '') : '',
+        educationLevels: snap.exists && Array.isArray(snap.data().educationLevels)
+          ? snap.data().educationLevels : ['SMA'],
+        majors: snap.exists && Array.isArray(snap.data().majors) ? snap.data().majors : []
+      };
     }),
 
     updateSchoolProfile: (payload) => run(async () => {
@@ -288,6 +294,11 @@ const FirebaseAdapter = (() => {
       const majors = [...new Set((payload.majors || []).map((major) => String(major).trim()).filter(Boolean))];
       if (!name) throw new Error('Nama sekolah wajib diisi.');
       if (!educationLevels.length) throw new Error('Pilih minimal satu jenjang pendidikan.');
+      if (name.length > 160 || String(payload.address || '').length > 500 ||
+          String(payload.phone || '').length > 40 || majors.some((major) => major.length > 40)) {
+        throw new Error('Periksa batas panjang nama, alamat, telepon, atau jurusan sekolah.');
+      }
+
       const classes = fromSnap(await col('classes').get());
       if (classes.some((item) => !educationLevels.includes(item.educationLevel || 'SMA'))) {
         throw new Error('Pindahkan kelas yang memakai jenjang tersebut sebelum menghapus jenjang dari profil sekolah.');
@@ -296,98 +307,28 @@ const FirebaseAdapter = (() => {
         ['SMA', 'SMK'].includes(item.educationLevel || 'SMA') && item.major && !majors.includes(item.major))) {
         throw new Error('Pindahkan kelas yang memakai jurusan tersebut sebelum menghapus jurusan dari profil sekolah.');
       }
-      await db.collection('schools').doc(activeSchoolId).update({
-        name,
-        address: String(payload.address || '').trim(),
-        phone: String(payload.phone || '').trim(),
-        educationLevels,
-        majors,
+
+      const uid = auth.currentUser?.uid;
+      const actor = uid ? await col('users').doc(uid).get() : null;
+      if (!actor?.exists || actor.data().role !== 'admin' || actor.data().status !== 'Aktif') {
+        throw new Error('Hanya admin aktif yang dapat mengubah profil sekolah.');
+      }
+      const address = String(payload.address || '').trim();
+      const phone = String(payload.phone || '').trim();
+      await db.collection('schoolSettings').doc('main').set({
+        name, address, phone, educationLevels, majors,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
+      }, { merge: true });
       await writeAudit({
-        action: 'update', entity: 'school', entityId: activeSchoolId,
+        action: 'update', entity: 'school', entityId: 'main',
         summary: 'Memperbarui profil dan konfigurasi jenjang sekolah.'
       });
-      return { id: activeSchoolId, name, address: String(payload.address || '').trim(),
-        phone: String(payload.phone || '').trim(), educationLevels, majors };
-    }),
-
-    isPlatformAdmin: () => run(async () => {
-      const uid = auth.currentUser?.uid;
-      if (!uid) return false;
-      const marker = await db.collection('platformAdmins').doc(uid).get();
-      return marker.exists;
-    }),
-
-    createSchool: (payload) => run(async () => {
-      const uid = auth.currentUser?.uid;
-      if (!uid || !(await db.collection('platformAdmins').doc(uid).get()).exists) {
-        throw new Error('Hanya administrator platform yang dapat menambahkan sekolah.');
-      }
-      const name = String(payload.name || '').trim();
-      const adminName = String(payload.adminName || '').trim();
-      const username = String(payload.adminUsername || '').trim();
-      const email = String(payload.adminEmail || '').trim().toLowerCase();
-      const password = String(payload.adminPassword || '');
-      const educationLevels = [...new Set(payload.educationLevels || [])]
-        .filter((level) => ['SD', 'SMP', 'SMA', 'SMK'].includes(level));
-      const majors = [...new Set((payload.majors || []).map((major) => String(major).trim()).filter(Boolean))];
-      if (!name || !adminName || !username) throw new Error('Nama sekolah, nama admin, dan username wajib diisi.');
-      if (!validEmail(email)) throw new Error('Email login admin sekolah tidak valid.');
-      if (password.length < 6) throw new Error('Password minimal 6 karakter.');
-      if (!educationLevels.length) throw new Error('Pilih minimal satu jenjang pendidikan.');
-
-      const schoolRef = db.collection('schools').doc();
-      let createdUser = null;
-      const sAuth = secondaryAuth();
-      try {
-        await schoolRef.set({
-          name,
-          address: String(payload.address || '').trim(),
-          phone: String(payload.phone || '').trim(),
-          educationLevels,
-          majors,
-          status: 'Aktif',
-          createdBy: uid,
-          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        const credential = await sAuth.createUserWithEmailAndPassword(email, password);
-        createdUser = credential.user;
-        await db.collection('users').doc(credential.user.uid).set({
-          name: adminName,
-          username,
-          usernameLower: username.toLowerCase(),
-          role: 'admin',
-          status: 'Aktif',
-          email,
-          schoolId: schoolRef.id
-        });
-        return { id: schoolRef.id, name, adminId: credential.user.uid };
-      } catch (error) {
-        const cleanupFailures = [];
-        if (createdUser) {
-          try { await createdUser.delete(); } catch (cleanupError) {
-            cleanupFailures.push(`akun Firebase (${cleanupError.message || 'gagal dihapus'})`);
-          }
-        }
-        try { await schoolRef.delete(); } catch (cleanupError) {
-          cleanupFailures.push(`dokumen sekolah (${cleanupError.message || 'gagal dihapus'})`);
-        }
-        if (cleanupFailures.length) {
-          throw new Error(
-            `${error.message || 'Sekolah gagal dibuat.'} Pembersihan parsial gagal untuk ${cleanupFailures.join(' dan ')}; periksa Firebase Console sebelum mencoba ulang.`
-          );
-        }
-        throw error;
-      } finally {
-        await sAuth.signOut();
-      }
+      return { id: 'main', name, address, phone, educationLevels, majors };
     }),
 
     /* ---------------- USERS ---------------- */
 
-    getUsers: () => run(async () => fromSnap(await col('users').where('schoolId', '==', activeSchoolId).get())),
+    getUsers: () => run(async () => fromSnap(await col('users').get())),
 
     createUser: (payload) => run(async () => {
       const username = String(payload.username).trim();
@@ -396,8 +337,7 @@ const FirebaseAdapter = (() => {
 
       if (!validEmail(email)) throw new Error('Email login wajib diisi dengan format email yang valid.');
 
-      const exists = await col('users').where('schoolId', '==', activeSchoolId)
-        .where('usernameLower', '==', usernameLower).limit(1).get();
+      const exists = await col('users').where('usernameLower', '==', usernameLower).limit(1).get();
       if (!exists.empty) throw new Error('Username sudah digunakan.');
 
       const sAuth = secondaryAuth();
@@ -416,8 +356,7 @@ const FirebaseAdapter = (() => {
         usernameLower,
         role: payload.role,
         status: payload.status || 'Aktif',
-        email,
-        schoolId: activeSchoolId
+        email
       };
 
       try {
@@ -518,8 +457,7 @@ const FirebaseAdapter = (() => {
       if (!exists.empty) throw new Error('Akun tersebut sudah terdaftar sebagai guru.');
 
       const data = { subject: '', status: 'Aktif', ...payload, className };
-      const users = await col('users').where('schoolId', '==', activeSchoolId)
-        .where('usernameLower', '==', String(data.username).toLowerCase()).limit(1).get();
+      const users = await col('users').where('usernameLower', '==', String(data.username).toLowerCase()).limit(1).get();
       if (users.empty || users.docs[0].data().role !== 'guru') {
         throw new Error('Pilih akun guru yang valid sebelum membuat profil guru.');
       }
@@ -545,8 +483,7 @@ const FirebaseAdapter = (() => {
         const dup = await col('teachers').where('username', '==', payload.username).get();
         if (dup.docs.some((doc) => doc.id !== id)) throw new Error('Akun tersebut sudah terdaftar sebagai guru.');
       }
-      const users = await col('users').where('schoolId', '==', activeSchoolId)
-        .where('usernameLower', '==', String(current.data().username).toLowerCase()).limit(1).get();
+      const users = await col('users').where('usernameLower', '==', String(current.data().username).toLowerCase()).limit(1).get();
       const batch = db.batch();
       batch.update(ref, payload);
       if (!users.empty && payload.className !== undefined) {
@@ -562,8 +499,7 @@ const FirebaseAdapter = (() => {
       const ref = col('teachers').doc(id);
       const teacher = await ref.get();
       if (!teacher.exists) return true;
-      const users = await col('users').where('schoolId', '==', activeSchoolId)
-        .where('usernameLower', '==', String(teacher.data().username).toLowerCase()).limit(1).get();
+      const users = await col('users').where('usernameLower', '==', String(teacher.data().username).toLowerCase()).limit(1).get();
       const batch = db.batch();
       batch.delete(ref);
       if (!users.empty) batch.update(users.docs[0].ref, { className: '' });
@@ -607,7 +543,14 @@ const FirebaseAdapter = (() => {
 
     createStudent: (payload) => run(async () => {
       const nis = String(payload.nis);
+      if (!/^\d{4,20}$/.test(nis)) throw new Error('NIS harus berupa 4–20 angka.');
+      if (String(payload.name || '').trim().length < 3 || String(payload.name).trim().length > 100) {
+        throw new Error('Nama siswa harus 3–100 karakter.');
+      }
+      if (!['L', 'P'].includes(payload.gender || 'L')) throw new Error('Jenis kelamin tidak valid.');
+      if (!['Aktif', 'Nonaktif'].includes(payload.status || 'Aktif')) throw new Error('Status siswa tidak valid.');
       const className = await requireClass(payload.className);
+      const details = studentDetails(payload, { includeDefaults: true });
       const ref = col('students').doc(nis);
 
       if ((await ref.get()).exists) throw new Error('NIS sudah terdaftar.');
@@ -622,7 +565,9 @@ const FirebaseAdapter = (() => {
       }
 
       const { nis: _ignore, ...rest } = payload;
-      const data = { userId: '', phone: '', gender: 'L', status: 'Aktif', ...rest, className };
+      const data = {
+        userId: '', gender: 'L', status: 'Aktif', ...rest, ...details, className
+      };
       const batch = db.batch();
       batch.set(ref, data);
       if (userRef) batch.update(userRef, { nis });
@@ -640,7 +585,14 @@ const FirebaseAdapter = (() => {
 
       const current = snap.data();
       const { nis: _ignore, ...rest } = payload;
+      const details = studentDetails(payload);
+      if (rest.name !== undefined && (String(rest.name).trim().length < 3 || String(rest.name).trim().length > 100)) {
+        throw new Error('Nama siswa harus 3–100 karakter.');
+      }
+      if (rest.gender !== undefined && !['L', 'P'].includes(rest.gender)) throw new Error('Jenis kelamin tidak valid.');
+      if (rest.status !== undefined && !['Aktif', 'Nonaktif'].includes(rest.status)) throw new Error('Status siswa tidak valid.');
       if (rest.className !== undefined) rest.className = await requireClass(rest.className);
+      Object.assign(rest, details);
 
       if (rest.userId && rest.userId !== current.userId) {
         const linked = await col('students').where('userId', '==', rest.userId).limit(1).get();
