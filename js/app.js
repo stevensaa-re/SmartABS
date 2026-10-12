@@ -9,7 +9,6 @@
 const MENUS = {
   admin: [
     { key: 'dashboard',     label: 'Dashboard',      icon: 'fa-gauge-high',         href: 'dashboard.html' },
-    { key: 'school',        label: 'Profil Sekolah',  icon: 'fa-building',           href: 'school.html' },
     { key: 'users',         label: 'Data Pengguna',  icon: 'fa-users-gear',         href: 'users.html' },
     { key: 'students',      label: 'Data Siswa',     icon: 'fa-user-graduate',      href: 'students.html' },
     { key: 'teachers',      label: 'Data Guru',      icon: 'fa-chalkboard-user',    href: 'teachers.html' },
@@ -18,7 +17,8 @@ const MENUS = {
     { key: 'calendar',      label: 'Kalender Akademik', icon: 'fa-calendar-check',  href: 'calendar.html' },
     { key: 'tools',         label: 'Impor, Backup & Audit', icon: 'fa-shield-halved', href: 'tools.html' },
     { key: 'announcements', label: 'Pengumuman',     icon: 'fa-bullhorn',           href: 'announcements.html' },
-    { key: 'reports',       label: 'Laporan',        icon: 'fa-chart-column',       href: 'reports.html' }
+    { key: 'reports',       label: 'Laporan',        icon: 'fa-chart-column',       href: 'reports.html' },
+    { key: 'school',        label: 'Pengaturan Sistem', icon: 'fa-gear',             href: 'school.html', section: 'PENGATURAN' }
   ],
   guru: [
     { key: 'dashboard',   label: 'Dashboard',         icon: 'fa-gauge-high',        href: 'dashboard.html' },
@@ -53,6 +53,7 @@ function sidebarHTML(session, activePage) {
   const menu = MENUS[session.role] || [];
 
   const items = menu.map((item) => `
+    ${item.section ? `<p class="nav-section-title">${escapeHtml(item.section)}</p>` : ''}
     <a class="nav-item ${item.key === activePage ? 'active' : ''}" href="${item.href}">
       <i class="fa-solid ${item.icon}"></i>
       <span>${escapeHtml(item.label)}</span>
