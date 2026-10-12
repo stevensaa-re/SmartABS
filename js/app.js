@@ -9,6 +9,7 @@
 const MENUS = {
   admin: [
     { key: 'dashboard',     label: 'Dashboard',      icon: 'fa-gauge-high',         href: 'dashboard.html' },
+    { key: 'school',        label: 'Profil Sekolah',  icon: 'fa-building',           href: 'school.html' },
     { key: 'users',         label: 'Data Pengguna',  icon: 'fa-users-gear',         href: 'users.html' },
     { key: 'students',      label: 'Data Siswa',     icon: 'fa-user-graduate',      href: 'students.html' },
     { key: 'teachers',      label: 'Data Guru',      icon: 'fa-chalkboard-user',    href: 'teachers.html' },
@@ -90,7 +91,7 @@ function navbarHTML(session, pageInfo) {
 
     <div class="navbar-title">
       <h2>${escapeHtml(pageInfo.label)}</h2>
-      <p>SMARTABS — Smart Attendance System</p>
+      <p>${escapeHtml(session.schoolName || 'SMARTABS')} · Smart Attendance System</p>
     </div>
 
     <div class="navbar-right">

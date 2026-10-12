@@ -25,6 +25,7 @@ const FirebaseAdapter = (() => {
   let db = null;
   let auth = null;
   let initPromise = null;
+  let activeSchoolId = '';
   const sessionClockOffsets = new Map();
 
   /* ---------- Pemuatan SDK ---------- */
@@ -68,6 +69,11 @@ const FirebaseAdapter = (() => {
         const unsubscribe = auth.onAuthStateChanged(() => { unsubscribe(); resolve(); });
       });
 
+      if (auth.currentUser) {
+        const profile = await db.collection('users').doc(auth.currentUser.uid).get();
+        activeSchoolId = profile.exists ? String(profile.data().schoolId || '') : '';
+      }
+
       /* Sesi aplikasi masih ada tetapi sesi Firebase hilang -> login ulang */
       const onLoginPage = !!document.getElementById('loginForm');
       if (!auth.currentUser && Session.get() && !onLoginPage) {
@@ -102,7 +108,11 @@ const FirebaseAdapter = (() => {
   };
   const fromSnap = (snap) => snap.docs.map(fromDoc);
   const byDateDesc = (a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0);
-  const col = (name) => db.collection(name);
+  const col = (name) => {
+    if (name === 'users') return db.collection(name);
+    if (!activeSchoolId) throw new Error('Akun belum terhubung ke sekolah. Hubungi administrator.');
+    return db.collection('schools').doc(activeSchoolId).collection(name);
+  };
   const createQrToken = () => crypto.randomUUID().replace(/-/g, '');
 
   async function writeAudit(entry) {
@@ -238,20 +248,146 @@ const FirebaseAdapter = (() => {
         await auth.signOut();
         return { ok: false, message: 'Akun Anda tidak aktif. Hubungi administrator.' };
       }
+      activeSchoolId = String(profile.schoolId || '');
+      if (!activeSchoolId) {
+        await auth.signOut();
+        return { ok: false, message: 'Akun belum terhubung ke sekolah. Administrator perlu menyiapkan/migrasikan data sekolah.' };
+      }
+      const school = await db.collection('schools').doc(activeSchoolId).get();
+      if (!school.exists || school.data().status !== 'Aktif') {
+        await auth.signOut();
+        activeSchoolId = '';
+        return { ok: false, message: 'Sekolah tidak ditemukan atau tidak aktif. Hubungi administrator.' };
+      }
       return {
         ok: true,
-        user: { id: snap.id, name: profile.name, username: profile.username, email: credential.user.email, role: profile.role }
+        user: {
+          id: snap.id, name: profile.name, username: profile.username,
+          email: credential.user.email, role: profile.role,
+          schoolId: activeSchoolId, schoolName: school.data().name
+        }
       };
     },
 
     async logout() {
-      try { await init(); await auth.signOut(); } catch (error) { /* abaikan */ }
+      try { await init(); await auth.signOut(); } catch (error) { /* Firebase logout is best effort. */ }
+      activeSchoolId = '';
       return true;
     },
 
+    getSchoolProfile: () => run(async () => {
+      const snap = await db.collection('schools').doc(activeSchoolId).get();
+      if (!snap.exists || snap.data().status !== 'Aktif') throw new Error('Profil sekolah tidak ditemukan atau tidak aktif.');
+      return { id: snap.id, ...snap.data() };
+    }),
+
+    updateSchoolProfile: (payload) => run(async () => {
+      const name = String(payload.name || '').trim();
+      const educationLevels = [...new Set(payload.educationLevels || [])]
+        .filter((level) => ['SD', 'SMP', 'SMA', 'SMK'].includes(level));
+      const majors = [...new Set((payload.majors || []).map((major) => String(major).trim()).filter(Boolean))];
+      if (!name) throw new Error('Nama sekolah wajib diisi.');
+      if (!educationLevels.length) throw new Error('Pilih minimal satu jenjang pendidikan.');
+      const classes = fromSnap(await col('classes').get());
+      if (classes.some((item) => !educationLevels.includes(item.educationLevel || 'SMA'))) {
+        throw new Error('Pindahkan kelas yang memakai jenjang tersebut sebelum menghapus jenjang dari profil sekolah.');
+      }
+      if (classes.some((item) =>
+        ['SMA', 'SMK'].includes(item.educationLevel || 'SMA') && item.major && !majors.includes(item.major))) {
+        throw new Error('Pindahkan kelas yang memakai jurusan tersebut sebelum menghapus jurusan dari profil sekolah.');
+      }
+      await db.collection('schools').doc(activeSchoolId).update({
+        name,
+        address: String(payload.address || '').trim(),
+        phone: String(payload.phone || '').trim(),
+        educationLevels,
+        majors,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      await writeAudit({
+        action: 'update', entity: 'school', entityId: activeSchoolId,
+        summary: 'Memperbarui profil dan konfigurasi jenjang sekolah.'
+      });
+      return { id: activeSchoolId, name, address: String(payload.address || '').trim(),
+        phone: String(payload.phone || '').trim(), educationLevels, majors };
+    }),
+
+    isPlatformAdmin: () => run(async () => {
+      const uid = auth.currentUser?.uid;
+      if (!uid) return false;
+      const marker = await db.collection('platformAdmins').doc(uid).get();
+      return marker.exists;
+    }),
+
+    createSchool: (payload) => run(async () => {
+      const uid = auth.currentUser?.uid;
+      if (!uid || !(await db.collection('platformAdmins').doc(uid).get()).exists) {
+        throw new Error('Hanya administrator platform yang dapat menambahkan sekolah.');
+      }
+      const name = String(payload.name || '').trim();
+      const adminName = String(payload.adminName || '').trim();
+      const username = String(payload.adminUsername || '').trim();
+      const email = String(payload.adminEmail || '').trim().toLowerCase();
+      const password = String(payload.adminPassword || '');
+      const educationLevels = [...new Set(payload.educationLevels || [])]
+        .filter((level) => ['SD', 'SMP', 'SMA', 'SMK'].includes(level));
+      const majors = [...new Set((payload.majors || []).map((major) => String(major).trim()).filter(Boolean))];
+      if (!name || !adminName || !username) throw new Error('Nama sekolah, nama admin, dan username wajib diisi.');
+      if (!validEmail(email)) throw new Error('Email login admin sekolah tidak valid.');
+      if (password.length < 6) throw new Error('Password minimal 6 karakter.');
+      if (!educationLevels.length) throw new Error('Pilih minimal satu jenjang pendidikan.');
+
+      const schoolRef = db.collection('schools').doc();
+      let createdUser = null;
+      const sAuth = secondaryAuth();
+      try {
+        await schoolRef.set({
+          name,
+          address: String(payload.address || '').trim(),
+          phone: String(payload.phone || '').trim(),
+          educationLevels,
+          majors,
+          status: 'Aktif',
+          createdBy: uid,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        const credential = await sAuth.createUserWithEmailAndPassword(email, password);
+        createdUser = credential.user;
+        await db.collection('users').doc(credential.user.uid).set({
+          name: adminName,
+          username,
+          usernameLower: username.toLowerCase(),
+          role: 'admin',
+          status: 'Aktif',
+          email,
+          schoolId: schoolRef.id
+        });
+        return { id: schoolRef.id, name, adminId: credential.user.uid };
+      } catch (error) {
+        const cleanupFailures = [];
+        if (createdUser) {
+          try { await createdUser.delete(); } catch (cleanupError) {
+            cleanupFailures.push(`akun Firebase (${cleanupError.message || 'gagal dihapus'})`);
+          }
+        }
+        try { await schoolRef.delete(); } catch (cleanupError) {
+          cleanupFailures.push(`dokumen sekolah (${cleanupError.message || 'gagal dihapus'})`);
+        }
+        if (cleanupFailures.length) {
+          throw new Error(
+            `${error.message || 'Sekolah gagal dibuat.'} Pembersihan parsial gagal untuk ${cleanupFailures.join(' dan ')}; periksa Firebase Console sebelum mencoba ulang.`
+          );
+        }
+        throw error;
+      } finally {
+        await sAuth.signOut();
+      }
+    }),
+
     /* ---------------- USERS ---------------- */
 
-    getUsers: () => run(async () => fromSnap(await col('users').get())),
+    getUsers: () => run(async () => fromSnap(await col('users').where('schoolId', '==', activeSchoolId).get())),
 
     createUser: (payload) => run(async () => {
       const username = String(payload.username).trim();
@@ -260,7 +396,8 @@ const FirebaseAdapter = (() => {
 
       if (!validEmail(email)) throw new Error('Email login wajib diisi dengan format email yang valid.');
 
-      const exists = await col('users').where('usernameLower', '==', usernameLower).limit(1).get();
+      const exists = await col('users').where('schoolId', '==', activeSchoolId)
+        .where('usernameLower', '==', usernameLower).limit(1).get();
       if (!exists.empty) throw new Error('Username sudah digunakan.');
 
       const sAuth = secondaryAuth();
@@ -279,7 +416,8 @@ const FirebaseAdapter = (() => {
         usernameLower,
         role: payload.role,
         status: payload.status || 'Aktif',
-        email
+        email,
+        schoolId: activeSchoolId
       };
 
       try {
@@ -380,7 +518,8 @@ const FirebaseAdapter = (() => {
       if (!exists.empty) throw new Error('Akun tersebut sudah terdaftar sebagai guru.');
 
       const data = { subject: '', status: 'Aktif', ...payload, className };
-      const users = await col('users').where('usernameLower', '==', String(data.username).toLowerCase()).limit(1).get();
+      const users = await col('users').where('schoolId', '==', activeSchoolId)
+        .where('usernameLower', '==', String(data.username).toLowerCase()).limit(1).get();
       if (users.empty || users.docs[0].data().role !== 'guru') {
         throw new Error('Pilih akun guru yang valid sebelum membuat profil guru.');
       }
@@ -406,7 +545,8 @@ const FirebaseAdapter = (() => {
         const dup = await col('teachers').where('username', '==', payload.username).get();
         if (dup.docs.some((doc) => doc.id !== id)) throw new Error('Akun tersebut sudah terdaftar sebagai guru.');
       }
-      const users = await col('users').where('usernameLower', '==', String(current.data().username).toLowerCase()).limit(1).get();
+      const users = await col('users').where('schoolId', '==', activeSchoolId)
+        .where('usernameLower', '==', String(current.data().username).toLowerCase()).limit(1).get();
       const batch = db.batch();
       batch.update(ref, payload);
       if (!users.empty && payload.className !== undefined) {
@@ -422,7 +562,8 @@ const FirebaseAdapter = (() => {
       const ref = col('teachers').doc(id);
       const teacher = await ref.get();
       if (!teacher.exists) return true;
-      const users = await col('users').where('usernameLower', '==', String(teacher.data().username).toLowerCase()).limit(1).get();
+      const users = await col('users').where('schoolId', '==', activeSchoolId)
+        .where('usernameLower', '==', String(teacher.data().username).toLowerCase()).limit(1).get();
       const batch = db.batch();
       batch.delete(ref);
       if (!users.empty) batch.update(users.docs[0].ref, { className: '' });

@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "main": "seed.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "migrate:school": "node migrate-single-school.cjs",
+    "test:tenant-rules": "node tenant-rules-smoke.cjs"
   },
   "keywords": [],
   "author": "",

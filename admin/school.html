@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Profil Sekolah — SMARTABS</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/dashboard.css">
+  <link rel="stylesheet" href="../css/responsive.css">
+  <script src="../js/config.js"></script>
+  <script src="../js/utils.js"></script>
+  <script src="../js/auth.js"></script>
+</head>
+<body data-role="admin" data-page="school">
+<script src="../js/guard.js"></script>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+  <div class="main">
+    <header class="navbar" id="navbar"></header>
+    <main class="content">
+      <div class="page-head">
+        <div>
+          <h1>Profil Sekolah</h1>
+          <p>Atur identitas sekolah, jenjang pendidikan, dan jurusan.</p>
+        </div>
+      </div>
+
+      <section id="backendNotice" class="card hidden">
+        <div class="card-body">Pengaturan multi-sekolah saat ini tersedia pada backend Firebase.</div>
+      </section>
+
+      <form id="schoolForm" class="card">
+        <div class="card-header"><h3>Identitas sekolah</h3></div>
+        <div class="card-body">
+          <div class="form-group">
+            <label for="schoolName">Nama sekolah <span class="req">*</span></label>
+            <input class="form-control" id="schoolName" required maxlength="160">
+          </div>
+          <div class="form-group">
+            <label for="schoolAddress">Alamat</label>
+            <textarea class="form-control" id="schoolAddress" rows="3" maxlength="500"></textarea>
+          </div>
+          <div class="form-group">
+            <label for="schoolPhone">Nomor telepon</label>
+            <input class="form-control" id="schoolPhone" maxlength="40">
+          </div>
+          <div class="form-group">
+            <label>Jenjang pendidikan</label>
+            <div class="checkbox-grid" id="educationLevels"></div>
+          </div>
+          <div class="form-group">
+            <label for="schoolMajors">Jurusan SMA/SMK</label>
+            <input class="form-control" id="schoolMajors" placeholder="IPA, IPS, RPL, TKJ">
+            <small class="text-muted">Pisahkan dengan koma. SD/SMP tidak memerlukan jurusan.</small>
+          </div>
+          <button class="btn btn-primary" id="saveSchool" type="submit">
+            <i class="fa-solid fa-floppy-disk"></i> Simpan profil
+          </button>
+        </div>
+      </form>
+
+      <section id="platformSection" class="card hidden">
+        <div class="card-header"><h3>Daftarkan sekolah baru</h3></div>
+        <div class="card-body">
+          <p>Satu project Firebase gratis dapat menampung banyak sekolah dengan data terisolasi. Buat sekolah dan akun admin pertamanya di sini.</p>
+          <form id="newSchoolForm">
+            <div class="form-group">
+              <label for="newSchoolName">Nama sekolah <span class="req">*</span></label>
+              <input class="form-control" id="newSchoolName" required maxlength="160">
+            </div>
+            <div class="form-group">
+              <label for="newSchoolAddress">Alamat</label>
+              <textarea class="form-control" id="newSchoolAddress" rows="2" maxlength="500"></textarea>
+            </div>
+            <div class="form-group">
+              <label for="newSchoolPhone">Nomor telepon</label>
+              <input class="form-control" id="newSchoolPhone" maxlength="40">
+            </div>
+            <div class="form-group">
+              <label>Jenjang pendidikan</label>
+              <div class="checkbox-grid" id="newEducationLevels"></div>
+            </div>
+            <div class="form-group">
+              <label for="newSchoolMajors">Jurusan SMA/SMK</label>
+              <input class="form-control" id="newSchoolMajors" placeholder="IPA, IPS, RPL, TKJ">
+            </div>
+            <hr>
+            <h4>Administrator sekolah pertama</h4>
+            <div class="form-group">
+              <label for="newAdminName">Nama administrator <span class="req">*</span></label>
+              <input class="form-control" id="newAdminName" required maxlength="120">
+            </div>
+            <div class="form-group">
+              <label for="newAdminUsername">Username <span class="req">*</span></label>
+              <input class="form-control" id="newAdminUsername" required maxlength="80" autocomplete="username">
+            </div>
+            <div class="form-group">
+              <label for="newAdminEmail">Email login <span class="req">*</span></label>
+              <input class="form-control" id="newAdminEmail" type="email" required autocomplete="email">
+            </div>
+            <div class="form-group">
+              <label for="newAdminPassword">Password awal <span class="req">*</span></label>
+              <input class="form-control" id="newAdminPassword" type="password" minlength="6" required autocomplete="new-password">
+            </div>
+            <button class="btn btn-primary" id="createSchool" type="submit">
+              <i class="fa-solid fa-plus"></i> Buat sekolah dan admin
+            </button>
+          </form>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<script src="../js/mock-data.js"></script>
+<script src="../js/adapters/local.js"></script>
+<script src="../js/adapters/mysql.js"></script>
+<script src="../js/adapters/firebase.js"></script>
+<script src="../js/api.js"></script>
+<script src="../js/notifications.js"></script>
+<script src="../js/app.js"></script>
+<script src="../js/school.js"></script>
+</body>
+</html>

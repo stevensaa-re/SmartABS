@@ -21,6 +21,8 @@ tersedia di bawah tidak boleh dianggap sudah siap dipakai.
 - Impor roster siswa/guru melalui CSV dengan pratinjau, validasi kelas, dan deteksi duplikat.
 - Backup JSON dan pemulihan merge tanpa menimpa dokumen yang sudah ada; log audit aktivitas
   penting dan histori koreksi absensi.
+- Multi-sekolah pada backend Firebase: profil sekolah, alamat, jenjang SD/SMP/SMA/SMK, dan daftar
+  jurusan yang dapat dikonfigurasi; website dan Android membatasi data berdasarkan sekolah.
 - Aplikasi desktop Windows x64 menggunakan UI website; workflow CI menghasilkan installer dan
   portable `.exe`.
 - Dukungan Firebase Authentication + Cloud Firestore, serta backend MySQL untuk website.
@@ -45,16 +47,57 @@ Mode `local` memakai `localStorage` browser dan hanya cocok untuk demo. Akun con
    **Cloud Firestore**.
 2. Salin konfigurasi aplikasi web dari Firebase Console ke `js/config.js` dan pilih
    `BACKEND: 'firebase'`.
-3. Dari folder ini, deploy rules dan indexes:
+3. Untuk project baru, buat satu akun admin di Firebase Authentication, lalu dokumen awal
+   `users/{uid}` melalui Firebase Console dengan field `name`, `username`, `usernameLower`,
+   `role: "admin"`, `status: "Aktif"`, dan `email`. Untuk project lama, gunakan akun admin aktif
+   yang sudah ada. Jangan buat `schoolId` manual; tool migrasi membuat profil sekolah sekaligus.
+4. Siapkan administrator awal dan jalankan migrasi/bootstrap sebelum memasang aplikasi baru:
 
    ```bash
+   cd database/firebase
+   npm install
+   gcloud auth application-default login
+   npm run migrate:school -- --project PROJECT_ID --school-id sekolah-utama \
+     --school-name "Nama Sekolah" --platform-admin-uid FIREBASE_AUTH_UID
+   ```
+
+   Perintah pertama hanya dry-run dan tidak mengubah data. Tinjau ringkasannya, buat backup
+   Firestore terlebih dahulu, lalu tambahkan `--apply` untuk menyalin koleksi lama dan memberi
+   `schoolId` pada profil pengguna, serta menyinkronkan kelas guru yang tertaut. Migrasi ini
+   mengasumsikan seluruh koleksi lama berasal dari **satu sekolah**; jika project sudah berisi data
+   beberapa sekolah, hentikan dan rencanakan
+   pemetaan tenant khusus sebelum menjalankannya. Data sumber lama tidak dihapus. ADC memerlukan
+   kredensial Google Cloud dengan hak Admin Firestore; jangan commit kredensial atau file service
+   account.
+5. Setelah bootstrap/migrasi berhasil, deploy rules dan indexes:
+
+   ```bash
+   cd ../..
    firebase deploy --only firestore:rules,firestore:indexes
    ```
 
-4. Buat pengguna admin melalui Firebase Authentication, lalu buat dokumen `users/{uid}` yang
-   sesuai di Firestore. Hubungkan akun guru/siswa dengan profil akademiknya sebelum digunakan.
-5. Untuk database yang sudah berisi data, backup dahulu. Jangan menjalankan seed demo pada data
-   produksi.
+   Jalankan migrasi sebelum deploy rules baru dan sebelum memperbarui website/APK. Rules baru
+   menolak koleksi datar lama agar tidak ada akses lintas sekolah.
+   Uji pemisahan tenant tanpa menyentuh project produksi dengan:
+
+   ```bash
+   firebase emulators:exec --only firestore,auth --project demo-smartabs \
+     'cd database/firebase && node tenant-rules-smoke.cjs'
+   ```
+
+   Test ini memastikan admin tidak dapat membaca profil, kelas, atau daftar pengguna tenant lain,
+   sedangkan administrator platform dapat membuat sekolah dan admin pertamanya.
+6. Admin platform pertama dipilih melalui `--platform-admin-uid`. Admin tersebut dapat membuat
+   sekolah baru dan akun admin pertamanya dari menu **Profil Sekolah** pada website maupun Android.
+   Admin sekolah mengatur nama, alamat, kontak, jenjang, dan daftar jurusan pada menu yang sama.
+   Siswa/guru kemudian dibuat di sekolah masing-masing seperti biasa.
+
+SMARTABS multi-sekolah menggunakan satu project Firebase **Spark (gratis)** bersama dengan
+Authentication dan Firestore; sekolah tidak perlu membuat project atau membayar hosting backend
+SMARTABS. Gratis bukan berarti tanpa batas: kapasitas mengikuti kuota Spark Firebase yang berlaku.
+Saat kuota habis, fitur dapat berhenti sampai kuota pulih; jangan mengaktifkan upgrade berbayar jika
+persyaratannya harus tetap gratis. Website multi-sekolah memerlukan backend Firebase; backend
+MySQL/local tidak menyediakan isolasi tenant. Jangan menjalankan seed demo pada data produksi.
 
 Website dan Android memakai project Firebase yang sama. Android memerlukan file
 `app/google-services.json` milik project tersebut; file itu tidak disertakan dalam repository ini.
