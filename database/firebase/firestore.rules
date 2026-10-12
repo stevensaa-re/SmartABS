@@ -63,7 +63,9 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/attendanceSessions/$(request.resource.data.sessionId))
         && qrSession(request.resource.data.sessionId).active == true
         && qrSession(request.resource.data.sessionId).expiresAt > request.time
-        && qrSession(request.resource.data.sessionId).token == request.resource.data.sessionToken
+        && (qrSession(request.resource.data.sessionId).token == request.resource.data.sessionToken
+            || (qrSession(request.resource.data.sessionId).get('previousToken', '') != ''
+                && qrSession(request.resource.data.sessionId).previousToken == request.resource.data.sessionToken))
         && qrSession(request.resource.data.sessionId).scheduleId == request.resource.data.scheduleId
         && qrSession(request.resource.data.sessionId).subject == request.resource.data.subject
         && qrSession(request.resource.data.sessionId).className == request.resource.data.className
@@ -75,7 +77,7 @@ service cloud.firestore {
         && request.resource.data.source == 'qr'
         && request.resource.data.time == request.time
         && request.resource.data.createdAt == request.time
-        && request.resource.data.sessionStartedAt == qrSession(request.resource.data.sessionId).createdAt
+        && request.resource.data.sessionStartedAt.seconds() == qrSession(request.resource.data.sessionId).createdAt.seconds()
         && id == request.resource.data.sessionId + '_' + myNis();
     }
     function hasAttendanceHistory(id) {

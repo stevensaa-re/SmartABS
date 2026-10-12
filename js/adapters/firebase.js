@@ -860,21 +860,25 @@ const FirebaseAdapter = (() => {
         teacherUid: firebaseUser.uid,
         teacherName: scheduleData.teacher || profile.name || '',
         token,
+        previousToken: '',
         active: false,
         expiresAt: firebase.firestore.Timestamp.fromMillis(now),
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       });
-      const created = await ref.get();
-      const serverTime = created.get('createdAt');
+      await ref.update({
+        active: true,
+        expiresAt: firebase.firestore.Timestamp.fromMillis(now + 30_000),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      const updated = await ref.get();
+      const serverTime = updated.get('createdAt');
       if (!serverTime) throw new Error('Waktu server Firebase belum tersedia. Coba buka sesi lagi.');
       const serverOffset = serverTime.toMillis() - Date.now();
       sessionClockOffsets.set(ref.id, serverOffset);
       const expiresAt = Date.now() + serverOffset + 30_000;
       await ref.update({
-        active: true,
-        expiresAt: firebase.firestore.Timestamp.fromMillis(expiresAt),
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        expiresAt: firebase.firestore.Timestamp.fromMillis(expiresAt)
       });
       return {
         id: ref.id,
@@ -895,16 +899,16 @@ const FirebaseAdapter = (() => {
       if (!snap.exists || !snap.data().active) throw new Error('Sesi absensi sudah ditutup.');
       const session = snap.data();
       let serverOffset = sessionClockOffsets.get(ref.id);
-      if (serverOffset === undefined) {
-        const createdAt = session.createdAt;
-        if (!createdAt) throw new Error('Waktu server sesi tidak tersedia. Buka ulang sesi absensi.');
-        serverOffset = createdAt.toMillis() - Date.now();
+      if (serverOffset === undefined || Math.abs(serverOffset) > 24 * 60 * 60 * 1000) {
+        serverOffset = 0;
         sessionClockOffsets.set(ref.id, serverOffset);
       }
+      const previousToken = String(session.token || '');
       const token = createQrToken();
       const expiresAt = Date.now() + serverOffset + 30_000;
       await ref.update({
         token,
+        previousToken,
         expiresAt: firebase.firestore.Timestamp.fromMillis(expiresAt),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       });
