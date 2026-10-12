@@ -207,15 +207,16 @@ service cloud.firestore {
       allow create: if (isAdmin() || (isGuru() && request.resource.data.className == assignedClass()))
         && request.resource.data.keys().hasAll([
           'scheduleId', 'subject', 'className', 'date', 'teacherUid', 'teacherName',
-          'token', 'active', 'expiresAt', 'createdAt', 'updatedAt'
+          'token', 'previousToken', 'active', 'expiresAt', 'createdAt', 'updatedAt'
         ])
         && request.resource.data.keys().hasOnly([
           'scheduleId', 'subject', 'className', 'date', 'teacherUid', 'teacherName',
-          'token', 'active', 'expiresAt', 'createdAt', 'updatedAt'
+          'token', 'previousToken', 'active', 'expiresAt', 'createdAt', 'updatedAt'
         ])
         && request.resource.data.teacherUid == request.auth.uid
         && request.resource.data.subject is string
         && request.resource.data.subject.size() > 0
+        && request.resource.data.previousToken is string
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time
         && request.resource.data.active == false
@@ -229,13 +230,13 @@ service cloud.firestore {
           && resource.data.teacherUid == request.auth.uid
           && resource.data.className == assignedClass()
           && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['token', 'expiresAt', 'updatedAt', 'active', 'closedAt'])
+            .hasOnly(['token', 'previousToken', 'expiresAt', 'updatedAt', 'active', 'closedAt'])
           && request.resource.data.updatedAt == request.time
           && (request.resource.data.active == false
             || (request.resource.data.token is string
               && request.resource.data.token.size() == 32
               && request.resource.data.expiresAt > request.time
-              && request.resource.data.expiresAt <= request.time + duration.value(35, 's'))));
+              && request.resource.data.expiresAt <= request.time + duration.value(60, 's'))));
       allow delete: if isAdmin();
     }
 
