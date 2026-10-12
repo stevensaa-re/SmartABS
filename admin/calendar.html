@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kalender Akademik — SMARTABS</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/table.css">
+  <link rel="stylesheet" href="../css/responsive.css">
+  <script src="../js/config.js"></script><script src="../js/utils.js"></script><script src="../js/auth.js"></script>
+</head>
+<body data-role="admin" data-page="calendar">
+<script src="../js/guard.js"></script>
+<div class="layout"><aside class="sidebar" id="sidebar"></aside><div class="sidebar-overlay" id="sidebarOverlay"></div>
+  <div class="main"><header class="navbar" id="navbar"></header><main class="content">
+    <div class="page-head"><div><h1>Kalender Akademik</h1><p>Atur kegiatan sekolah, ujian, dan hari libur.</p></div>
+      <button class="btn btn-primary" id="addCalendarEvent"><i class="fa-solid fa-plus"></i> Tambah Agenda</button></div>
+    <section class="card"><div class="card-body"><div class="form-row">
+      <div class="form-group"><label for="calendarFrom">Mulai</label><input class="form-control" id="calendarFrom" type="date"></div>
+      <div class="form-group"><label for="calendarTo">Sampai</label><input class="form-control" id="calendarTo" type="date"></div>
+    </div><div id="calendarEvents"></div></div></section>
+  </main></div>
+</div>
+<div class="modal" id="calendarModal"><div class="modal-dialog"><div class="modal-header"><h3 id="calendarModalTitle">Tambah Agenda</h3>
+  <button class="icon-btn" id="closeCalendarModal" aria-label="Tutup"><i class="fa-solid fa-xmark"></i></button></div>
+  <form id="calendarForm"><div class="modal-body">
+    <input type="hidden" id="calendarEventId">
+    <div class="form-group"><label for="calendarTitle">Judul</label><input class="form-control" id="calendarTitle" maxlength="120" required></div>
+    <div class="form-row"><div class="form-group"><label for="calendarType">Jenis</label>
+      <select class="form-control" id="calendarType"><option>Akademik</option><option>Ujian</option><option>Kegiatan</option><option>Libur</option></select></div>
+      <div class="form-group"><label for="calendarStart">Tanggal mulai</label><input class="form-control" id="calendarStart" type="date" required></div></div>
+    <div class="form-group"><label for="calendarEnd">Tanggal selesai</label><input class="form-control" id="calendarEnd" type="date" required></div>
+    <div class="form-group"><label for="calendarDescription">Keterangan</label><textarea class="form-control" id="calendarDescription" maxlength="1000"></textarea></div>
+    <label><input type="checkbox" id="calendarHoliday"> Hari libur (tidak ada kegiatan belajar)</label>
+  </div><div class="modal-footer"><button class="btn btn-outline" type="button" id="cancelCalendarModal">Batal</button>
+    <button class="btn btn-primary" type="submit">Simpan</button></div></form></div></div>
+<script src="../js/mock-data.js"></script><script src="../js/adapters/local.js"></script><script src="../js/adapters/mysql.js"></script>
+<script src="../js/adapters/firebase.js"></script><script src="../js/api.js"></script><script src="../js/notifications.js"></script>
+<script src="../js/app.js"></script><script src="../js/calendar.js"></script>
+</body></html>

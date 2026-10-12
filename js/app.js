@@ -14,6 +14,8 @@ const MENUS = {
     { key: 'teachers',      label: 'Data Guru',      icon: 'fa-chalkboard-user',    href: 'teachers.html' },
     { key: 'classes',       label: 'Data Kelas',     icon: 'fa-school',             href: 'classes.html' },
     { key: 'schedule',      label: 'Jadwal',         icon: 'fa-calendar-days',      href: 'schedule.html' },
+    { key: 'calendar',      label: 'Kalender Akademik', icon: 'fa-calendar-check',  href: 'calendar.html' },
+    { key: 'tools',         label: 'Impor, Backup & Audit', icon: 'fa-shield-halved', href: 'tools.html' },
     { key: 'announcements', label: 'Pengumuman',     icon: 'fa-bullhorn',           href: 'announcements.html' },
     { key: 'reports',       label: 'Laporan',        icon: 'fa-chart-column',       href: 'reports.html' }
   ],
@@ -21,6 +23,7 @@ const MENUS = {
     { key: 'dashboard',   label: 'Dashboard',         icon: 'fa-gauge-high',        href: 'dashboard.html' },
     { key: 'attendance',  label: 'Absensi',           icon: 'fa-clipboard-check',   href: 'attendance.html' },
     { key: 'schedule',    label: 'Jadwal Mengajar',   icon: 'fa-calendar-days',     href: 'schedule.html' },
+    { key: 'calendar',    label: 'Kalender Akademik', icon: 'fa-calendar-check',     href: 'calendar.html' },
     { key: 'students',    label: 'Data Siswa',        icon: 'fa-user-graduate',     href: 'students.html' },
     { key: 'permissions', label: 'Izin / Sakit / Alpa', icon: 'fa-file-circle-check', href: 'permissions.html' },
     { key: 'reports',     label: 'Laporan',           icon: 'fa-chart-column',      href: 'reports.html' }
@@ -31,6 +34,7 @@ const MENUS = {
     { key: 'history',       label: 'Riwayat Kehadiran', icon: 'fa-clock-rotate-left',  href: 'history.html' },
     { key: 'permissions',   label: 'Pengajuan Izin',    icon: 'fa-file-circle-plus',   href: 'permissions.html' },
     { key: 'schedule',      label: 'Jadwal',            icon: 'fa-calendar-days',      href: 'schedule.html' },
+    { key: 'calendar',      label: 'Kalender Akademik', icon: 'fa-calendar-check',     href: 'calendar.html' },
     { key: 'announcements', label: 'Pengumuman',        icon: 'fa-bullhorn',           href: 'announcements.html' }
   ]
 };

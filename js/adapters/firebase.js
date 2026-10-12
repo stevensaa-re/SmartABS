@@ -105,6 +105,29 @@ const FirebaseAdapter = (() => {
   const col = (name) => db.collection(name);
   const createQrToken = () => crypto.randomUUID().replace(/-/g, '');
 
+  async function writeAudit(entry) {
+    const firebaseUser = auth.currentUser;
+    if (!firebaseUser) throw new Error('Sesi Firebase berakhir. Silakan login kembali.');
+    const profile = await col('users').doc(firebaseUser.uid).get();
+    if (!profile.exists || !['admin', 'guru'].includes(profile.data().role)) {
+      throw new Error('Hanya petugas aktif yang dapat mencatat audit.');
+    }
+    try {
+      await col('auditLogs').add({
+        actorUid: firebaseUser.uid,
+        actorName: String(profile.data().name || ''),
+        actorRole: String(profile.data().role || ''),
+        action: String(entry.action || ''),
+        entity: String(entry.entity || ''),
+        entityId: String(entry.entityId || ''),
+        summary: String(entry.summary || ''),
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    } catch (error) {
+      throw new Error(`Perubahan mungkin sudah tersimpan, tetapi log audit gagal dicatat: ${error.message || 'kesalahan tidak diketahui'}`);
+    }
+  }
+
   /* Jalankan fungsi dengan init + terjemahan pesan error */
   async function run(fn) {
     await init();
@@ -267,6 +290,8 @@ const FirebaseAdapter = (() => {
       } finally {
         await sAuth.signOut();
       }
+      await writeAudit({ action: 'create', entity: 'user', entityId: credential.user.uid,
+        summary: `Membuat akun ${profile.username} dengan role ${profile.role}.` });
       return { id: credential.user.uid, ...profile };
     }),
 
@@ -318,6 +343,8 @@ const FirebaseAdapter = (() => {
         }
       }
       await ref.update(changes);
+      await writeAudit({ action: 'update', entity: 'user', entityId: id,
+        summary: `Memperbarui profil/status akun ${current.username}.` });
       return { id, ...current, ...changes };
     }),
 
@@ -327,6 +354,8 @@ const FirebaseAdapter = (() => {
       const snap = await ref.get();
       if (!snap.exists) return true;
       await ref.update({ status: 'Nonaktif' });
+      await writeAudit({ action: 'deactivate', entity: 'user', entityId: id,
+        summary: `Menonaktifkan akun ${snap.get('username') || id}.` });
       return true;
     }),
 
@@ -360,6 +389,8 @@ const FirebaseAdapter = (() => {
       batch.set(ref, data);
       batch.update(users.docs[0].ref, { className: data.className });
       await batch.commit();
+      await writeAudit({ action: 'create', entity: 'teacher', entityId: ref.id,
+        summary: `Membuat profil guru ${data.name} untuk kelas ${data.className}.` });
       return { id: ref.id, ...data };
     }),
 
@@ -382,6 +413,8 @@ const FirebaseAdapter = (() => {
         batch.update(users.docs[0].ref, { className: payload.className });
       }
       await batch.commit();
+      await writeAudit({ action: 'update', entity: 'teacher', entityId: id,
+        summary: `Memperbarui profil guru ${current.get('name') || id}.` });
       return fromDoc(await ref.get());
     }),
 
@@ -394,6 +427,8 @@ const FirebaseAdapter = (() => {
       batch.delete(ref);
       if (!users.empty) batch.update(users.docs[0].ref, { className: '' });
       await batch.commit();
+      await writeAudit({ action: 'delete', entity: 'teacher', entityId: id,
+        summary: `Menghapus profil guru ${teacher.get('name') || id}.` });
       return true;
     }),
 
@@ -452,6 +487,8 @@ const FirebaseAdapter = (() => {
       if (userRef) batch.update(userRef, { nis });
       await batch.commit();
 
+      await writeAudit({ action: 'create', entity: 'student', entityId: nis,
+        summary: `Membuat profil siswa ${data.name} (${nis}).` });
       return { nis, ...data };
     }),
 
@@ -484,6 +521,8 @@ const FirebaseAdapter = (() => {
       }
       await batch.commit();
 
+      await writeAudit({ action: 'update', entity: 'student', entityId: String(nis),
+        summary: `Memperbarui profil siswa ${rest.name || current.name || nis}.` });
       return { nis: String(nis), ...current, ...rest };
     }),
 
@@ -499,6 +538,8 @@ const FirebaseAdapter = (() => {
         batch.update(col('users').doc(snap.data().userId), { nis: firebase.firestore.FieldValue.delete() });
       }
       await batch.commit();
+      await writeAudit({ action: 'delete', entity: 'student', entityId: id,
+        summary: `Menghapus profil siswa ${snap.get('name') || id}.` });
       return true;
     }),
 
@@ -519,6 +560,8 @@ const FirebaseAdapter = (() => {
 
       const data = { capacity: 36, homeroom: '', ...payload };
       const ref = await col('classes').add(data);
+      await writeAudit({ action: 'create', entity: 'class', entityId: ref.id,
+        summary: `Membuat kelas ${data.name}.` });
       return { id: ref.id, ...data };
     }),
 
@@ -546,6 +589,8 @@ const FirebaseAdapter = (() => {
       }
 
       await ref.update(payload);
+      await writeAudit({ action: 'update', entity: 'class', entityId: id,
+        summary: `Memperbarui kelas ${payload.name || oldName}.` });
       return fromDoc(await ref.get());
     }),
 
@@ -563,6 +608,8 @@ const FirebaseAdapter = (() => {
       schedules.docs.forEach((doc) => ops.push((batch) => batch.delete(doc.ref)));
 
       await commitInChunks(ops);
+      await writeAudit({ action: 'delete', entity: 'class', entityId: id,
+        summary: `Menghapus kelas ${name}.` });
       return true;
     }),
 
@@ -579,16 +626,23 @@ const FirebaseAdapter = (() => {
 
     createSchedule: (payload) => run(async () => {
       const ref = await col('schedules').add(payload);
+      await writeAudit({ action: 'create', entity: 'schedule', entityId: ref.id,
+        summary: `Menambahkan jadwal ${payload.subject} untuk kelas ${payload.className}.` });
       return { id: ref.id, ...payload };
     }),
 
     updateSchedule: (id, payload) => run(async () => {
       await col('schedules').doc(id).update(payload);
+      await writeAudit({ action: 'update', entity: 'schedule', entityId: id,
+        summary: `Memperbarui jadwal ${payload.subject || id}.` });
       return fromDoc(await col('schedules').doc(id).get());
     }),
 
     deleteSchedule: (id) => run(async () => {
+      const snap = await col('schedules').doc(id).get();
       await col('schedules').doc(id).delete();
+      await writeAudit({ action: 'delete', entity: 'schedule', entityId: id,
+        summary: `Menghapus jadwal ${snap.get('subject') || id}.` });
       return true;
     }),
 
@@ -606,16 +660,23 @@ const FirebaseAdapter = (() => {
     createAnnouncement: (payload) => run(async () => {
       const data = { status: 'Publish', ...payload };
       const ref = await col('announcements').add(data);
+      await writeAudit({ action: 'create', entity: 'announcement', entityId: ref.id,
+        summary: `Menerbitkan pengumuman ${data.title}.` });
       return { id: ref.id, ...data };
     }),
 
     updateAnnouncement: (id, payload) => run(async () => {
       await col('announcements').doc(id).update(payload);
+      await writeAudit({ action: 'update', entity: 'announcement', entityId: id,
+        summary: `Memperbarui pengumuman ${payload.title || id}.` });
       return fromDoc(await col('announcements').doc(id).get());
     }),
 
     deleteAnnouncement: (id) => run(async () => {
+      const snap = await col('announcements').doc(id).get();
       await col('announcements').doc(id).delete();
+      await writeAudit({ action: 'delete', entity: 'announcement', entityId: id,
+        summary: `Menghapus pengumuman ${snap.get('title') || id}.` });
       return true;
     }),
 
@@ -764,6 +825,8 @@ const FirebaseAdapter = (() => {
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
       });
+      await writeAudit({ action: 'attendance-change', entity: 'attendance', entityId: id,
+        summary: `Mengubah absensi ${student.name} (${date}) menjadi ${status}.` });
       return fromDoc(await ref.get());
     }),
 
@@ -1028,6 +1091,10 @@ const FirebaseAdapter = (() => {
       };
 
       const ref = await col('permissions').add(data);
+      if (Session.get()?.role !== 'siswa') {
+        await writeAudit({ action: 'create', entity: 'permission', entityId: ref.id,
+          summary: `Membuat pengajuan ${data.type} untuk ${data.name} (${data.date}).` });
+      }
       return { id: ref.id, ...data };
     }),
 
@@ -1041,7 +1108,7 @@ const FirebaseAdapter = (() => {
       if (!actorSnap.exists) throw new Error('Profil petugas tidak ditemukan.');
       const actorName = actorSnap.data().name || '';
 
-      return db.runTransaction(async (transaction) => {
+      const result = await db.runTransaction(async (transaction) => {
         const permissionSnap = await transaction.get(permRef);
         if (!permissionSnap.exists) throw new Error('Pengajuan tidak ditemukan.');
         const item = { id, ...permissionSnap.data(), status };
@@ -1085,6 +1152,9 @@ const FirebaseAdapter = (() => {
         }
         return item;
       });
+      await writeAudit({ action: 'review', entity: 'permission', entityId: id,
+        summary: `Memutus pengajuan ${id} sebagai ${status}.` });
+      return result;
     }),
 
     /* ---------------- REPORTS ---------------- */
@@ -1114,6 +1184,177 @@ const FirebaseAdapter = (() => {
         (!status || row.status === status));
 
       return buildReport(students, attendance);
+    }),
+
+    getCalendarEvents: () => run(async () =>
+      fromSnap(await col('calendarEvents').orderBy('startDate').get())),
+
+    saveCalendarEvent: (payload) => run(async () => {
+      const title = String(payload.title || '').trim();
+      const startDate = String(payload.startDate || '');
+      const endDate = String(payload.endDate || '');
+      if (!title || !/^\d{4}-\d{2}-\d{2}$/.test(startDate) ||
+          !/^\d{4}-\d{2}-\d{2}$/.test(endDate) || startDate > endDate) {
+        throw new Error('Lengkapi judul dan rentang tanggal kalender yang valid.');
+      }
+      const ref = payload.id ? col('calendarEvents').doc(String(payload.id)) : col('calendarEvents').doc();
+      const current = payload.id ? await ref.get() : null;
+      if (payload.id && !current.exists) throw new Error('Agenda kalender tidak ditemukan.');
+      const data = {
+        title,
+        type: String(payload.type || 'Akademik'),
+        startDate,
+        endDate,
+        description: String(payload.description || ''),
+        isHoliday: Boolean(payload.isHoliday),
+        ...(current?.exists ? { updatedAt: firebase.firestore.FieldValue.serverTimestamp() } : {
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        })
+      };
+      await ref.set(data, { merge: Boolean(payload.id) });
+      await writeAudit({
+        action: payload.id ? 'update' : 'create',
+        entity: 'calendarEvent',
+        entityId: ref.id,
+        summary: `${payload.id ? 'Memperbarui' : 'Menambahkan'} agenda "${title}".`
+      });
+      return { id: ref.id, ...data };
+    }),
+
+    deleteCalendarEvent: (id) => run(async () => {
+      const ref = col('calendarEvents').doc(String(id));
+      const snap = await ref.get();
+      if (!snap.exists) throw new Error('Agenda kalender tidak ditemukan.');
+      await ref.delete();
+      await writeAudit({ action: 'delete', entity: 'calendarEvent', entityId: ref.id,
+        summary: `Menghapus agenda "${snap.get('title') || ref.id}".` });
+      return true;
+    }),
+
+    getAuditLogs: () => run(async () =>
+      fromSnap(await col('auditLogs').orderBy('createdAt', 'desc').limit(500).get())),
+
+    logAudit: (entry) => run(async () => {
+      await writeAudit(entry);
+      return true;
+    }),
+
+    exportBackup: () => run(async () => {
+      const profile = await col('users').doc(auth.currentUser.uid).get();
+      if (!profile.exists || profile.data().role !== 'admin') throw new Error('Backup hanya dapat dibuat oleh admin.');
+      const collections = ['classes', 'students', 'teachers', 'schedules', 'announcements',
+        'attendance', 'permissions', 'calendarEvents'];
+      const snapshots = await Promise.all(collections.map((name) => col(name).get()));
+      const data = {};
+      snapshots.forEach((snapshot, index) => {
+        data[collections[index]] = snapshot.docs.map((doc) => {
+          const value = doc.data();
+          Object.keys(value).forEach((key) => {
+            if (value[key] && typeof value[key].toDate === 'function') value[key] = value[key].toDate().toISOString();
+          });
+          return { id: doc.id, ...value };
+        });
+      });
+      return {
+        format: 'smartabs-backup',
+        version: 1,
+        generatedAt: new Date().toISOString(),
+        limitations: ['Akun Firebase Authentication dan kredensial tidak termasuk.', 'Subkoleksi riwayat audit absensi QR tidak termasuk.'],
+        data
+      };
+    }),
+
+    restoreBackup: (backup) => run(async () => {
+      const profile = await col('users').doc(auth.currentUser.uid).get();
+      if (!profile.exists || profile.data().role !== 'admin') throw new Error('Pemulihan backup hanya dapat dilakukan oleh admin.');
+      if (!backup || backup.format !== 'smartabs-backup' || backup.version !== 1 || !backup.data ||
+          typeof backup.data !== 'object') throw new Error('Format backup SMARTABS tidak valid.');
+      const collections = ['classes', 'students', 'teachers', 'schedules', 'announcements',
+        'attendance', 'permissions', 'calendarEvents'];
+      const prepared = [];
+      let total = 0;
+      for (const name of collections) {
+        const rows = backup.data[name] || [];
+        if (!Array.isArray(rows)) throw new Error(`Bagian ${name} pada backup tidak valid.`);
+        total += rows.length;
+        if (total > 5000) throw new Error('Backup melebihi batas pemulihan 5.000 dokumen.');
+        for (const row of rows) {
+          if (!row || typeof row !== 'object') throw new Error(`Dokumen dalam ${name} tidak valid.`);
+          const id = String(name === 'students' ? row.nis : row.id || '');
+          if (!id || id.length > 128) throw new Error(`Ada dokumen ${name} tanpa ID yang valid.`);
+          prepared.push({ name, id, row });
+        }
+      }
+      const result = { restored: 0, skipped: 0 };
+      const actorUid = auth.currentUser.uid;
+      const actorName = String(profile.data().name || '');
+      const present = new Map(collections.map((name) => [name, new Set()]));
+      for (const name of collections) {
+        const ids = prepared.filter((item) => item.name === name).map((item) => item.id);
+        for (let offset = 0; offset < ids.length; offset += 30) {
+          const snapshot = await col(name)
+            .where(firebase.firestore.FieldPath.documentId(), 'in', ids.slice(offset, offset + 30)).get();
+          snapshot.docs.forEach((doc) => present.get(name).add(doc.id));
+        }
+      }
+      const usernames = [...new Set(prepared
+        .filter((item) => item.name === 'teachers')
+        .map((item) => String(item.row.username || '').toLowerCase())
+        .filter(Boolean))];
+      const teacherUsers = new Map();
+      for (let offset = 0; offset < usernames.length; offset += 30) {
+        const snapshot = await col('users')
+          .where('usernameLower', 'in', usernames.slice(offset, offset + 30)).get();
+        snapshot.docs.forEach((doc) => {
+          const user = doc.data();
+          if (user.role === 'guru' && user.status === 'Aktif') {
+            teacherUsers.set(String(user.usernameLower).toLowerCase(), doc.ref);
+          }
+        });
+      }
+      const operations = [];
+      for (const item of prepared) {
+        if (present.get(item.name).has(item.id)) { result.skipped++; continue; }
+        if (item.name === 'teachers' && !teacherUsers.has(String(item.row.username || '').toLowerCase())) {
+          result.skipped++;
+          continue;
+        }
+        const ref = col(item.name).doc(item.id);
+        const { id: _id, ...row } = item.row;
+        const data = { ...row };
+        if (item.name === 'students') data.userId = '';
+        if (item.name === 'attendance') {
+          if (data.sessionId) { result.skipped++; continue; }
+          const historyRef = ref.collection('history').doc();
+          data.lastChangeId = historyRef.id;
+          data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+          data.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+          operations.push((batch) => batch.set(ref, data));
+          operations.push((batch) => batch.set(historyRef, {
+            actorUid, actorName, action: 'created', studentId: String(data.studentId || ''),
+            className: String(data.className || ''), date: String(data.date || ''),
+            previousStatus: '', previousNote: '', nextStatus: String(data.status || ''),
+            nextNote: String(data.note || ''), reason: 'Pemulihan dari backup SMARTABS',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          }));
+        } else if (item.name === 'calendarEvents') {
+          data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+          data.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+          operations.push((batch) => batch.set(ref, data));
+        } else {
+          operations.push((batch) => batch.set(ref, data));
+          if (item.name === 'teachers') {
+            operations.push((batch) => batch.update(
+              teacherUsers.get(String(item.row.username).toLowerCase()), { className: data.className || '' }));
+          }
+        }
+        result.restored++;
+      }
+      await commitInChunks(operations);
+      await writeAudit({ action: 'restore', entity: 'backup', entityId: '',
+        summary: `Pemulihan backup merge: ${result.restored} data dipulihkan, ${result.skipped} duplikat/QR dilewati.` });
+      return result;
     }),
 
     async resetDatabase() {

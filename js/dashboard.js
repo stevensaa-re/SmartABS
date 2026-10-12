@@ -245,6 +245,27 @@ async function initGuruDashboard() {
     { label: 'Alpa',  value: alpa,  color: '#dc2626' }
   ]);
 
+  const trendBody = document.getElementById('homeroomTrendRows');
+  const trendByStudent = new Map();
+  classStudents.forEach((student) => trendByStudent.set(student.nis, {
+    name: student.name, nis: student.nis, late: 0, absent: 0
+  }));
+  attendance.forEach((row) => {
+    const summary = trendByStudent.get(row.studentId);
+    if (!summary) return;
+    if (row.status === 'Terlambat') summary.late++;
+    if (row.status === 'Alpa') summary.absent++;
+  });
+  const trends = [...trendByStudent.values()]
+    .filter((row) => row.late || row.absent)
+    .sort((a, b) => b.late - a.late || b.absent - a.absent || a.name.localeCompare(b.name, 'id'))
+    .slice(0, 10);
+  trendBody.innerHTML = trends.length
+    ? trends.map((row) => `<tr><td class="cell-strong">${escapeHtml(row.name)}</td>
+      <td>${escapeHtml(row.nis)}</td><td class="text-center">${row.late}</td>
+      <td class="text-center">${row.absent}</td></tr>`).join('')
+    : emptyTableRow(4, 'Belum ada keterlambatan atau alpa', 'Pemantauan kelas menampilkan data 7 hari terakhir.');
+
   document.getElementById('todayLabel').textContent = formatDate(today);
 
   const recent = todayRows

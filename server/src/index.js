@@ -9,6 +9,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 
 const { authenticate } = require('./auth');
+const { query } = require('./db');
 const { HttpError } = require('./util');
 
 /* Gagal cepat bila konfigurasi wajib belum benar */
@@ -34,7 +35,7 @@ app.use(cors({
   }
 }));
 
-app.use(express.json({ limit: '100kb' }));
+app.use(express.json({ limit: '25mb' }));
 
 /* ---------- Routes ---------- */
 
@@ -44,6 +45,31 @@ app.use('/api/auth', require('./routes/auth'));            // publik (login)
 
 /* Semua route di bawah wajib login; hak akses per role diatur di tiap route */
 app.use('/api', authenticate);
+app.use('/api', (req, res, next) => {
+  const entity = req.path.split('/').filter(Boolean)[0] || 'api';
+  const excluded = ['audit-logs'].includes(entity) ||
+    (entity === 'backup' && req.path.endsWith('/restore'));
+  const shouldAudit = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) &&
+    !excluded && ['admin', 'guru'].includes(req.user.role);
+  if (!shouldAudit) return next();
+
+  const originalJson = res.json.bind(res);
+  res.json = (body) => {
+    if (res.statusCode >= 400) return originalJson(body);
+    const resourceId = req.path.split('/').filter(Boolean)[1] || '';
+    const action = ({ POST: 'create', PUT: 'update', PATCH: 'update', DELETE: 'delete' })[req.method];
+    return query(`INSERT INTO audit_logs (actor_id, actor_name, actor_role, action, entity, entity_id, summary)
+      VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [req.user.id, req.user.name, req.user.role, action, entity, resourceId.slice(0, 100),
+      `${req.method} ${req.path}`.slice(0, 500)])
+      .then(() => originalJson(body))
+      .catch((error) => {
+        console.error('Perubahan API tersimpan, tetapi audit gagal dicatat:', error);
+        next(new HttpError(500, 'Perubahan mungkin sudah tersimpan, tetapi log audit gagal dicatat. Periksa data sebelum mengulangi aksi.'));
+      });
+  };
+  next();
+});
 app.use('/api/users', require('./routes/users'));
 app.use('/api/teachers', require('./routes/teachers'));
 app.use('/api/students', require('./routes/students'));
@@ -53,6 +79,9 @@ app.use('/api/announcements', require('./routes/announcements'));
 app.use('/api/attendance', require('./routes/attendance'));
 app.use('/api/permissions', require('./routes/permissions'));
 app.use('/api/reports', require('./routes/reports'));
+app.use('/api/calendar', require('./routes/calendar'));
+app.use('/api/audit-logs', require('./routes/audit-logs'));
+app.use('/api/backup', require('./routes/backup'));
 
 app.use((req, res) => res.status(404).json({ message: 'Endpoint tidak ditemukan.' }));
 

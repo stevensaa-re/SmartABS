@@ -16,14 +16,17 @@ tersedia di bawah tidak boleh dianggap sudah siap dipakai.
   mencatat kehadiran satu kali per sesi.
 - Pengajuan izin/sakit dan persetujuan oleh petugas.
 - Filter laporan berdasarkan periode, kelas, mata pelajaran, dan status; ekspor CSV di website.
+- Kalender akademik untuk kegiatan dan hari libur, tersedia pada website dan Android.
+- Dashboard pemantauan wali kelas untuk tren terlambat dan alpa tujuh hari terakhir.
+- Impor roster siswa/guru melalui CSV dengan pratinjau, validasi kelas, dan deteksi duplikat.
+- Backup JSON dan pemulihan merge tanpa menimpa dokumen yang sudah ada; log audit aktivitas
+  penting dan histori koreksi absensi.
+- Aplikasi desktop Windows x64 menggunakan UI website; workflow CI menghasilkan installer dan
+  portable `.exe`.
 - Dukungan Firebase Authentication + Cloud Firestore, serta backend MySQL untuk website.
 
-### Sedang direncanakan
-
-Pengembangan lanjutan mencakup kalender akademik dan semester, impor data CSV/Excel, dashboard
-wali kelas, cakupan log audit/backup yang lebih luas, notifikasi push, serta aplikasi desktop
-Windows. Notifikasi push otomatis membutuhkan pengirim tepercaya; fitur ini ditunda sampai ada
-backend yang dapat digunakan tanpa biaya hosting tetap. Rilis desktop belum tersedia.
+Notifikasi push saat aplikasi tertutup sengaja ditunda. Pengiriman otomatis memerlukan backend
+tepercaya dan tidak diaktifkan pada konfigurasi ini.
 
 ## Menjalankan website
 
@@ -71,6 +74,12 @@ Atur `BACKEND: 'mysql'` dan `MYSQL.API_URL` di `js/config.js`. Gunakan `npm run 
 membuat tabel tanpa data demo. QR per mata pelajaran memerlukan Firebase dan tidak tersedia pada
 mode MySQL maupun local.
 
+Untuk database MySQL lama, buat salinan database lalu jalankan migrasi kalender/audit:
+
+```bash
+mysql -u smartabs_user -p smartabs < database/mysql/migrate-calendar-audit.sql
+```
+
 ## Keamanan dan konfigurasi privat
 
 - Jangan commit `serviceAccountKey.json`, `.env`, kunci signing Android, atau file kredensial
@@ -85,7 +94,35 @@ mode MySQL maupun local.
 - Firebase Rules, bukan menu/guard browser, adalah batas otorisasi data sebenarnya. Tinjau rules
   sebelum deploy ke project yang berisi data.
 
-## Struktur repository
+## Impor, audit, dan backup
+
+Admin membuka menu **Impor, Backup & Audit**. Template impor tersedia untuk data siswa dan guru;
+format CSV memakai header `nis,nama,kelas,jenis_kelamin,no_hp` atau
+`username,nama,kelas,mata_pelajaran`. Impor guru hanya membuat profil untuk akun guru aktif yang
+sudah ada; impor tidak membuat email, akun, atau password. Tautan akun siswa dapat disambungkan
+kemudian dari menu Data Siswa.
+
+Backup JSON tidak menyertakan kredensial maupun identitas Firebase Authentication. Pemulihan
+bersifat merge: dokumen dengan ID yang sudah digunakan dilewati, bukan ditimpa. Dokumen akun
+siswa yang diimpor tidak otomatis ditautkan kembali; hubungkan ulang profil akun secara manual.
+Uji proses backup/pemulihan pada salinan project sebelum dipakai untuk data sekolah.
+
+## Aplikasi desktop Windows
+
+Paket Desktop menjalankan UI web melalui server loopback lokal dengan Electron terisolasi (tanpa
+Node integration di halaman). Untuk membangun di Windows x64, gunakan Node.js 22.12 atau lebih
+baru:
+
+```bash
+npm ci
+npm run desktop:win
+```
+
+Hasil installer NSIS dan portable `.exe` berada di `dist/`. Keduanya menggunakan konfigurasi
+Firebase web yang sama seperti `js/config.js`; konfigurasi Firebase klien memang bersifat publik,
+tetapi jangan sertakan service-account key atau `.env`. Pada GitHub, workflow
+`.github/workflows/desktop.yml` dapat dijalankan manual untuk menghasilkan artifacts atau
+dipicu dengan tag `desktop-v*` untuk mengunggah kedua `.exe` ke GitHub Release.
 
 ```text
 admin/                 Halaman admin
@@ -101,9 +138,10 @@ tools/                 Utilitas persiapan rilis
 .github/workflows/     Otomasi GitHub Pages
 ```
 
-Android native dikembangkan dalam folder project terpisah `SmartabsAndroid` di workspace. Untuk
-membangun aplikasi Android, buka folder tersebut dengan Android Studio dan siapkan file
-`google-services.json` Firebase lokal.
+Android native dikembangkan dalam folder project terpisah `SmartabsAndroid` di workspace. Android
+menyediakan jadwal, kalender, pemantauan keterlambatan wali kelas, impor CSV, ekspor/pemulihan
+backup, dan pembacaan log audit admin. Untuk membangun aplikasi Android, buka folder tersebut
+dengan Android Studio dan siapkan file `google-services.json` Firebase lokal.
 
 ## Publikasi GitHub Pages
 
@@ -118,8 +156,9 @@ memerlukan konfigurasi project milik pemilik deployment.
 - Ganti/hapus akun demo dan pastikan email serta status setiap akun benar.
 - Untuk MySQL, gunakan HTTPS, akun database dengan hak minimum, dan JWT secret acak.
 - Buat backup database terjadwal dan uji prosedur pemulihan sebelum operasi nyata.
-- Firestore Spark mendukung CRUD klien langsung, tetapi pekerjaan terjadwal dan push server-side
-  memerlukan backend tepercaya.
+- Backup dari menu admin adalah ekspor/pemulihan manual client-side, bukan backup terjadwal.
+- Push notification tertunda; fitur itu memerlukan pengirim tepercaya dan belum termasuk dalam
+  rilis aplikasi.
 
 ## Kontribusi pengembangan
 

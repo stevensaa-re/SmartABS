@@ -163,6 +163,16 @@ const MysqlAdapter = (() => {
     getReport: ({ from, to, className, subject, status } = {}) =>
       get(`/reports${query({ from, to, className, subject, status })}`),
 
+    getCalendarEvents: () => get('/calendar'),
+    saveCalendarEvent: (payload) => payload.id
+      ? put(`/calendar/${enc(payload.id)}`, payload)
+      : post('/calendar', payload),
+    deleteCalendarEvent: (id) => del(`/calendar/${enc(id)}`).then(() => true),
+    getAuditLogs: () => get('/audit-logs'),
+    logAudit: (entry) => post('/audit-logs', entry),
+    exportBackup: () => get('/backup'),
+    restoreBackup: (payload) => post('/backup/restore', payload),
+
     async resetDatabase() {
       throw new Error('Reset database hanya tersedia pada mode local.');
     }

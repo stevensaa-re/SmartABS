@@ -36,7 +36,10 @@ const API_CONTRACT = [
   /* permissions */
   'getPermissions', 'getPermissionsByStudent', 'createPermission', 'reviewPermission',
   /* reports */
-  'getReport'
+  'getReport',
+  /* calendar, audit, and backup */
+  'getCalendarEvents', 'saveCalendarEvent', 'deleteCalendarEvent',
+  'getAuditLogs', 'logAudit', 'exportBackup', 'restoreBackup'
 ];
 
 const API = (() => {

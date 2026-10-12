@@ -13,6 +13,8 @@ USE smartabs;
 -- Urutan DROP mengikuti ketergantungan foreign key (anak dulu)
 SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS permissions;
+DROP TABLE IF EXISTS audit_logs;
+DROP TABLE IF EXISTS calendar_events;
 DROP TABLE IF EXISTS attendance;
 DROP TABLE IF EXISTS schedules;
 DROP TABLE IF EXISTS announcements;
@@ -174,4 +176,39 @@ CREATE TABLE permissions (
     ON UPDATE CASCADE ON DELETE SET NULL,
   CONSTRAINT fk_permissions_reviewer FOREIGN KEY (reviewed_by) REFERENCES users (id)
     ON UPDATE CASCADE ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+-- ---------------------------------------------------------
+-- calendar_events : agenda akademik dan hari libur
+-- ---------------------------------------------------------
+CREATE TABLE calendar_events (
+  id          VARCHAR(40)  NOT NULL,
+  title       VARCHAR(120) NOT NULL,
+  type        VARCHAR(30)  NOT NULL DEFAULT 'Akademik',
+  start_date  DATE         NOT NULL,
+  end_date    DATE         NOT NULL,
+  description TEXT         NOT NULL,
+  is_holiday  BOOLEAN      NOT NULL DEFAULT FALSE,
+  created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_calendar_dates (start_date, end_date)
+) ENGINE=InnoDB;
+
+-- ---------------------------------------------------------
+-- audit_logs : catatan append-only untuk aktivitas penting
+-- ---------------------------------------------------------
+CREATE TABLE audit_logs (
+  id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  actor_id    VARCHAR(20)  NOT NULL,
+  actor_name  VARCHAR(100) NOT NULL,
+  actor_role  ENUM('admin','guru') NOT NULL,
+  action      VARCHAR(30)  NOT NULL,
+  entity      VARCHAR(60)  NOT NULL,
+  entity_id   VARCHAR(100) NOT NULL DEFAULT '',
+  summary     VARCHAR(500) NOT NULL,
+  created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_audit_created (created_at),
+  KEY idx_audit_actor (actor_id, created_at)
 ) ENGINE=InnoDB;

@@ -1,4 +1,8 @@
 **/node_modules/
+/dist/
+/out/
+/release/
+*.exe
 **/serviceAccountKey*.json
 **/google-services.json
 **/local.properties

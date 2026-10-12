@@ -18,6 +18,8 @@ const LocalAdapter = (() => {
     schedules:     'smartabs_schedules',
     announcements: 'smartabs_announcements',
     permissions:   'smartabs_permissions',
+    calendarEvents:'smartabs_calendar_events',
+    auditLogs:     'smartabs_audit_logs',
     seed:          'smartabs_seed_version'
   };
 
@@ -605,6 +607,110 @@ const LocalAdapter = (() => {
       });
 
       return buildReport(students, attendance);
+    },
+
+    async getCalendarEvents() {
+      await delay();
+      return readTable('calendarEvents').sort((a, b) =>
+        a.startDate.localeCompare(b.startDate) || a.title.localeCompare(b.title, 'id'));
+    },
+
+    async saveCalendarEvent(payload) {
+      await delay();
+      const title = String(payload.title || '').trim();
+      const startDate = String(payload.startDate || '');
+      const endDate = String(payload.endDate || '');
+      if (!title || !/^\d{4}-\d{2}-\d{2}$/.test(startDate) ||
+          !/^\d{4}-\d{2}-\d{2}$/.test(endDate) || startDate > endDate) {
+        throw new Error('Lengkapi judul dan rentang tanggal kalender yang valid.');
+      }
+      const events = readTable('calendarEvents');
+      const id = payload.id || makeId('CAL');
+      const event = { ...payload, id, title, startDate, endDate, type: payload.type || 'Akademik',
+        description: payload.description || '', isHoliday: Boolean(payload.isHoliday) };
+      const index = events.findIndex((item) => item.id === id);
+      if (index < 0) events.push(event);
+      else events[index] = { ...events[index], ...event };
+      writeTable('calendarEvents', events);
+      return event;
+    },
+
+    async deleteCalendarEvent(id) {
+      await delay();
+      writeTable('calendarEvents', readTable('calendarEvents').filter((item) => item.id !== id));
+      return true;
+    },
+
+    async getAuditLogs() {
+      await delay();
+      return readTable('auditLogs').sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 500);
+    },
+
+    async logAudit(entry) {
+      await delay();
+      const session = Session.get();
+      const logs = readTable('auditLogs');
+      const item = {
+        id: makeId('LOG'),
+        actorUid: session?.id || '',
+        actorName: session?.name || 'Demo',
+        actorRole: session?.role || '',
+        action: String(entry.action || 'aksi'),
+        entity: String(entry.entity || 'data'),
+        entityId: String(entry.entityId || ''),
+        summary: String(entry.summary || ''),
+        createdAt: new Date().toISOString()
+      };
+      logs.push(item);
+      writeTable('auditLogs', logs.slice(-1000));
+      return item;
+    },
+
+    async exportBackup() {
+      await delay();
+      const tables = ['classes', 'students', 'teachers', 'schedules', 'announcements',
+        'attendance', 'permissions', 'calendarEvents'];
+      return {
+        format: 'smartabs-backup',
+        version: 1,
+        generatedAt: new Date().toISOString(),
+        limitations: ['Akun autentikasi dan kata sandi tidak termasuk dalam backup.'],
+        data: Object.fromEntries(tables.map((table) => [
+          table, readTable(table).map(({ password, ...row }) => row)
+        ]))
+      };
+    },
+
+    async restoreBackup(backup) {
+      await delay();
+      if (!backup || backup.format !== 'smartabs-backup' || backup.version !== 1 || !backup.data) {
+        throw new Error('Format backup SMARTABS tidak valid.');
+      }
+      const tables = ['classes', 'students', 'teachers', 'schedules', 'announcements',
+        'attendance', 'permissions', 'calendarEvents'];
+      const result = { restored: 0, skipped: 0 };
+      tables.forEach((table) => {
+        const incoming = backup.data[table] || [];
+        if (!Array.isArray(incoming)) throw new Error(`Data ${table} pada backup tidak valid.`);
+        const existing = readTable(table);
+        const ids = new Set(existing.map((row) => String(row.id || row.nis || '')));
+        incoming.forEach((row) => {
+          const id = String(row.id || row.nis || '');
+          if (!id || ids.has(id)) { result.skipped++; return; }
+          const safe = { ...row };
+          if (table === 'students') safe.userId = '';
+          existing.push(safe);
+          ids.add(id);
+          result.restored++;
+        });
+        writeTable(table, existing);
+      });
+      await this.logAudit({
+        action: 'restore',
+        entity: 'backup',
+        summary: `Pemulihan backup merge: ${result.restored} data dipulihkan, ${result.skipped} duplikat dilewati.`
+      });
+      return result;
     },
 
     /* ---------------- UTIL ---------------- */

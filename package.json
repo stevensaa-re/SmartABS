@@ -1,0 +1,46 @@
+{
+  "name": "smartabs-desktop",
+  "version": "1.0.0",
+  "description": "Aplikasi desktop SMARTABS untuk Windows",
+  "main": "desktop/main.cjs",
+  "private": true,
+  "scripts": {
+    "desktop:win": "electron-builder --win nsis portable --x64",
+    "desktop:dir": "electron-builder --dir"
+  },
+  "devDependencies": {
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "id.smartabs.desktop",
+    "productName": "SMARTABS",
+    "asar": true,
+    "files": [
+      "desktop/main.cjs",
+      "admin/**/*",
+      "guru/**/*",
+      "siswa/**/*",
+      "css/**/*",
+      "js/**/*",
+      "login.html",
+      "index.html",
+      "database/seed-data.js",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ],
+      "artifactName": "${productName}-${version}-win-x64.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}

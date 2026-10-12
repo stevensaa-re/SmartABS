@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Impor, Backup & Audit — SMARTABS</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <link rel="stylesheet" href="../css/style.css"><link rel="stylesheet" href="../css/table.css"><link rel="stylesheet" href="../css/responsive.css">
+  <script src="../js/config.js"></script><script src="../js/utils.js"></script><script src="../js/auth.js"></script>
+</head>
+<body data-role="admin" data-page="tools"><script src="../js/guard.js"></script>
+<div class="layout"><aside class="sidebar" id="sidebar"></aside><div class="sidebar-overlay" id="sidebarOverlay"></div>
+  <div class="main"><header class="navbar" id="navbar"></header><main class="content">
+    <div class="page-head"><div><h1>Impor, Backup & Audit</h1><p>Kelola data awal dan tinjau perubahan penting.</p></div></div>
+    <section class="card"><div class="card-header"><h3>Impor data CSV</h3><button class="btn btn-outline btn-sm" id="downloadTemplate">Unduh template</button></div>
+      <div class="card-body">
+        <div class="form-row">
+          <div class="form-group"><label for="importType">Jenis data</label><select class="form-control" id="importType">
+            <option value="students">Siswa</option><option value="teachers">Guru</option></select></div>
+          <div class="form-group"><label for="importFile">Berkas CSV (maks. 5 MB, 1.000 baris)</label>
+            <input class="form-control" type="file" id="importFile" accept=".csv,text/csv"></div>
+        </div>
+        <p class="text-muted" id="importHint">Siswa: NIS, nama, kelas, jenis_kelamin (L/P), no_hp. NIS dan kelas harus unik/tersedia.</p>
+        <div id="importPreview" class="table-wrap"></div>
+        <div class="head-actions"><button class="btn btn-primary" id="runImport" disabled><i class="fa-solid fa-file-import"></i> Impor baris valid</button></div>
+        <div id="importResult" aria-live="polite"></div>
+      </div>
+    </section>
+    <section class="card"><div class="card-header"><h3>Backup dan pemulihan</h3></div><div class="card-body">
+      <p class="text-muted">Backup menyertakan data master, jadwal, agenda, absensi, dan izin. Akun Firebase Authentication/kata sandi tidak disertakan. Pemulihan hanya menambahkan dokumen yang belum ada; duplikat dilewati dan tidak menimpa data aktif.</p>
+      <div class="form-row">
+        <div class="form-group"><label for="restoreFile">Berkas backup SMARTABS (JSON, maks. 25 MB)</label><input class="form-control" id="restoreFile" type="file" accept=".json,application/json"></div>
+        <div class="form-group"><label>&nbsp;</label><button class="btn btn-outline" id="createBackup"><i class="fa-solid fa-download"></i> Buat backup JSON</button></div>
+      </div>
+      <button class="btn btn-danger" id="restoreBackup" disabled><i class="fa-solid fa-clock-rotate-left"></i> Pulihkan (merge aman)</button>
+      <div id="backupResult" aria-live="polite"></div>
+    </div></section>
+    <section class="card"><div class="card-header"><h3>Log audit</h3><button class="btn btn-outline btn-sm" id="refreshAudit">Muat ulang</button></div>
+      <div class="table-wrap"><table class="data-table"><thead><tr><th>Waktu</th><th>Petugas</th><th>Aksi</th><th>Data</th><th>Ringkasan</th></tr></thead><tbody id="auditRows"></tbody></table></div>
+    </section>
+  </main></div>
+</div>
+<script src="../js/mock-data.js"></script><script src="../js/adapters/local.js"></script><script src="../js/adapters/mysql.js"></script>
+<script src="../js/adapters/firebase.js"></script><script src="../js/api.js"></script><script src="../js/notifications.js"></script>
+<script src="../js/app.js"></script><script src="../js/admin-tools.js"></script></body></html>
