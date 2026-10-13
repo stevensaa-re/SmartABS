@@ -70,11 +70,20 @@ async function updateSchoolProfile(headers) {
             name: { stringValue: 'SMA Contoh' },
             address: { stringValue: 'Jl. Pendidikan 1' },
             phone: { stringValue: '021123456' },
+            npsn: { stringValue: '12345678' },
+            principalName: { stringValue: 'Kepala Sekolah' },
+            email: { stringValue: 'sekolah@example.sch.id' },
+            website: { stringValue: 'https://sekolah.example.sch.id' },
+            accreditation: { stringValue: 'A' },
+            foundedYear: { stringValue: '1998' },
             educationLevels: { arrayValue: { values: [{ stringValue: 'SMA' }] } },
             majors: { arrayValue: { values: [{ stringValue: 'IPA' }] } }
           }
         },
-        updateMask: { fieldPaths: ['name', 'address', 'phone', 'educationLevels', 'majors'] },
+        updateMask: { fieldPaths: [
+          'name', 'address', 'phone', 'npsn', 'principalName', 'email', 'website',
+          'accreditation', 'foundedYear', 'educationLevels', 'majors'
+        ] },
         updateTransforms: [{ fieldPath: 'updatedAt', setToServerValue: 'REQUEST_TIME' }]
       }]
     })
@@ -94,6 +103,7 @@ async function main() {
   await writeDocument('classes/class-1', { name: 'X-A' });
   await writeDocument('schoolSettings/main', {
     name: 'SMA Awal', address: '', phone: '',
+    npsn: '', principalName: '', email: '', website: '', accreditation: '', foundedYear: '',
     educationLevels: ['SMA'], majors: [], updatedAt: new Date().toISOString()
   });
 

@@ -29,33 +29,79 @@
       </div>
 
       <form id="schoolForm" class="card">
-        <div class="card-header"><h3>Identitas dan konfigurasi sekolah</h3></div>
+        <div class="card-header"><h3>Pengaturan identitas dan akademik sekolah</h3></div>
         <div class="card-body">
           <div class="alert alert-info">
             Setelah disimpan, nama sekolah tampil di bagian atas halaman. Jenjang dan jurusan akan
             menjadi pilihan pada formulir Data Kelas; menu dan tata letak aplikasi tidak berubah.
           </div>
-          <div class="form-group">
-            <label for="schoolName">Nama sekolah <span class="req">*</span></label>
-            <input class="form-control" id="schoolName" required maxlength="160">
-          </div>
-          <div class="form-group">
-            <label for="schoolAddress">Alamat</label>
-            <textarea class="form-control" id="schoolAddress" rows="3" maxlength="500"></textarea>
-          </div>
-          <div class="form-group">
-            <label for="schoolPhone">Nomor telepon</label>
-            <input class="form-control" id="schoolPhone" maxlength="40">
-          </div>
-          <div class="form-group">
-            <label>Jenjang pendidikan</label>
-            <div class="checkbox-grid" id="educationLevels"></div>
-          </div>
-          <div class="form-group">
-            <label for="schoolMajors">Jurusan SMA/SMK</label>
-            <input class="form-control" id="schoolMajors" placeholder="IPA, IPS, RPL, TKJ">
-            <small class="text-muted">Pisahkan dengan koma. SD/SMP tidak memerlukan jurusan.</small>
-          </div>
+          <section class="school-settings-section">
+            <h3>Identitas resmi</h3>
+            <p class="text-muted">Informasi dasar yang digunakan untuk mengenali sekolah.</p>
+            <div class="form-group">
+              <label for="schoolName">Nama sekolah <span class="req">*</span></label>
+              <input class="form-control" id="schoolName" required maxlength="160">
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="schoolNpsn">NPSN</label>
+                <input class="form-control" id="schoolNpsn" inputmode="numeric" maxlength="8" placeholder="8 digit NPSN">
+              </div>
+              <div class="form-group">
+                <label for="schoolPrincipal">Kepala sekolah</label>
+                <input class="form-control" id="schoolPrincipal" maxlength="120">
+              </div>
+              <div class="form-group">
+                <label for="schoolFoundedYear">Tahun berdiri</label>
+                <input class="form-control" id="schoolFoundedYear" type="number" min="1800" max="2100" placeholder="Contoh: 1998">
+              </div>
+              <div class="form-group">
+                <label for="schoolAccreditation">Akreditasi</label>
+                <select class="form-control" id="schoolAccreditation">
+                  <option value="">Belum diisi</option>
+                  <option value="A">A</option>
+                  <option value="B">B</option>
+                  <option value="C">C</option>
+                  <option value="Belum Terakreditasi">Belum Terakreditasi</option>
+                </select>
+              </div>
+            </div>
+          </section>
+          <section class="school-settings-section">
+            <h3>Alamat dan kontak</h3>
+            <p class="text-muted">Kanal resmi yang dapat dihubungi oleh siswa dan orang tua.</p>
+            <div class="form-group">
+              <label for="schoolAddress">Alamat lengkap</label>
+              <textarea class="form-control" id="schoolAddress" rows="3" maxlength="500"></textarea>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="schoolPhone">Nomor telepon</label>
+                <input class="form-control" id="schoolPhone" maxlength="40">
+              </div>
+              <div class="form-group">
+                <label for="schoolEmail">Email resmi</label>
+                <input class="form-control" id="schoolEmail" type="email" maxlength="160" placeholder="sekolah@example.sch.id">
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="schoolWebsite">Website sekolah</label>
+              <input class="form-control" id="schoolWebsite" type="url" maxlength="200" placeholder="https://sekolah.sch.id">
+            </div>
+          </section>
+          <section class="school-settings-section">
+            <h3>Konfigurasi akademik</h3>
+            <p class="text-muted">Daftar jenjang dan jurusan ini digunakan sebagai pilihan saat mengelola kelas.</p>
+            <div class="form-group">
+              <label>Jenjang pendidikan</label>
+              <div class="checkbox-grid" id="educationLevels"></div>
+            </div>
+            <div class="form-group">
+              <label for="schoolMajors">Jurusan SMA/SMK</label>
+              <input class="form-control" id="schoolMajors" placeholder="IPA, IPS, RPL, TKJ">
+              <small class="text-muted">Pisahkan dengan koma. SD/SMP tidak memerlukan jurusan.</small>
+            </div>
+          </section>
           <div class="alert alert-info" id="schoolImpactNotice" hidden></div>
           <div class="card" aria-live="polite">
             <div class="card-header"><h3>Pratinjau identitas</h3></div>

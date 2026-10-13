@@ -281,6 +281,12 @@ const FirebaseAdapter = (() => {
         name: snap.exists ? String(snap.data().name || '') : '',
         address: snap.exists ? String(snap.data().address || '') : '',
         phone: snap.exists ? String(snap.data().phone || '') : '',
+        npsn: snap.exists ? String(snap.data().npsn || '') : '',
+        principalName: snap.exists ? String(snap.data().principalName || '') : '',
+        email: snap.exists ? String(snap.data().email || '') : '',
+        website: snap.exists ? String(snap.data().website || '') : '',
+        accreditation: snap.exists ? String(snap.data().accreditation || '') : '',
+        foundedYear: snap.exists ? String(snap.data().foundedYear || '') : '',
         educationLevels: snap.exists && Array.isArray(snap.data().educationLevels)
           ? snap.data().educationLevels : ['SMA'],
         majors: snap.exists && Array.isArray(snap.data().majors) ? snap.data().majors : []
@@ -298,6 +304,15 @@ const FirebaseAdapter = (() => {
           String(payload.phone || '').length > 40 || majors.some((major) => major.length > 40)) {
         throw new Error('Periksa batas panjang nama, alamat, telepon, atau jurusan sekolah.');
       }
+      const profileFields = {
+        npsn: String(payload.npsn || '').trim(),
+        principalName: String(payload.principalName || '').trim(),
+        email: String(payload.email || '').trim(),
+        website: String(payload.website || '').trim(),
+        accreditation: String(payload.accreditation || '').trim(),
+        foundedYear: String(payload.foundedYear || '').trim()
+      };
+      validateSchoolDetails(profileFields);
 
       const classes = fromSnap(await col('classes').get());
       if (classes.some((item) => !educationLevels.includes(item.educationLevel || 'SMA'))) {
@@ -316,14 +331,14 @@ const FirebaseAdapter = (() => {
       const address = String(payload.address || '').trim();
       const phone = String(payload.phone || '').trim();
       await db.collection('schoolSettings').doc('main').set({
-        name, address, phone, educationLevels, majors,
+        name, address, phone, ...profileFields, educationLevels, majors,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
       await writeAudit({
         action: 'update', entity: 'school', entityId: 'main',
         summary: 'Memperbarui profil dan konfigurasi jenjang sekolah.'
       });
-      return { id: 'main', name, address, phone, educationLevels, majors };
+      return { id: 'main', name, address, phone, ...profileFields, educationLevels, majors };
     }),
 
     /* ---------------- USERS ---------------- */

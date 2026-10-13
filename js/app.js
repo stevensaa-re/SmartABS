@@ -18,7 +18,8 @@ const MENUS = {
     { key: 'tools',         label: 'Impor, Backup & Audit', icon: 'fa-shield-halved', href: 'tools.html' },
     { key: 'announcements', label: 'Pengumuman',     icon: 'fa-bullhorn',           href: 'announcements.html' },
     { key: 'reports',       label: 'Laporan',        icon: 'fa-chart-column',       href: 'reports.html' },
-    { key: 'school',        label: 'Pengaturan Sistem', icon: 'fa-gear',             href: 'school.html', section: 'PENGATURAN' }
+    { key: 'school',        label: 'Pengaturan Sistem', icon: 'fa-gear',             href: 'school.html', section: 'PENGATURAN' },
+    { key: 'preferences',   label: 'Preferensi Saya', icon: 'fa-sliders',            href: '../preferences.html', section: 'PREFERENSI' }
   ],
   guru: [
     { key: 'dashboard',   label: 'Dashboard',         icon: 'fa-gauge-high',        href: 'dashboard.html' },
@@ -27,7 +28,8 @@ const MENUS = {
     { key: 'calendar',    label: 'Kalender Akademik', icon: 'fa-calendar-check',     href: 'calendar.html' },
     { key: 'students',    label: 'Data Siswa',        icon: 'fa-user-graduate',     href: 'students.html' },
     { key: 'permissions', label: 'Izin / Sakit / Alpa', icon: 'fa-file-circle-check', href: 'permissions.html' },
-    { key: 'reports',     label: 'Laporan',           icon: 'fa-chart-column',      href: 'reports.html' }
+    { key: 'reports',       label: 'Laporan',        icon: 'fa-chart-column',       href: 'reports.html' },
+    { key: 'preferences',   label: 'Preferensi Saya', icon: 'fa-sliders',           href: '../preferences.html', section: 'PREFERENSI' }
   ],
   siswa: [
     { key: 'dashboard',     label: 'Dashboard',         icon: 'fa-gauge-high',         href: 'dashboard.html' },
@@ -36,13 +38,46 @@ const MENUS = {
     { key: 'permissions',   label: 'Pengajuan Izin',    icon: 'fa-file-circle-plus',   href: 'permissions.html' },
     { key: 'schedule',      label: 'Jadwal',            icon: 'fa-calendar-days',      href: 'schedule.html' },
     { key: 'calendar',      label: 'Kalender Akademik', icon: 'fa-calendar-check',     href: 'calendar.html' },
-    { key: 'announcements', label: 'Pengumuman',        icon: 'fa-bullhorn',           href: 'announcements.html' }
+    { key: 'announcements', label: 'Pengumuman',     icon: 'fa-bullhorn',           href: 'announcements.html' },
+    { key: 'preferences',   label: 'Preferensi Saya', icon: 'fa-sliders',            href: '../preferences.html', section: 'PREFERENSI' }
   ]
 };
 
 function getPageInfo(role, key) {
   const list = MENUS[role] || [];
+  if (key === 'preferences') return { label: 'Preferensi Saya', icon: 'fa-sliders' };
   return list.find((item) => item.key === key) || { label: 'Dashboard', icon: 'fa-gauge-high' };
+}
+
+function currentUserPreferences() {
+  const session = Session.get();
+  if (!session) return {};
+  try {
+    const saved = JSON.parse(localStorage.getItem(`smartabs.preferences.${session.id}`) || '{}');
+    return saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
+  } catch (error) {
+    console.error('Preferensi tampilan tidak dapat dibaca:', error);
+    return {};
+  }
+}
+
+function applyUserPreferences() {
+  const prefs = currentUserPreferences();
+  const theme = ['light', 'dark'].includes(prefs.theme) ? prefs.theme
+    : (window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  document.body.dataset.theme = theme;
+  document.body.dataset.accent = ['blue', 'violet', 'teal'].includes(prefs.accent) ? prefs.accent : 'blue';
+  document.body.dataset.fontSize = ['small', 'normal', 'large'].includes(prefs.fontSize) ? prefs.fontSize : 'normal';
+  document.body.dataset.density = ['comfortable', 'compact'].includes(prefs.density) ? prefs.density : 'comfortable';
+}
+
+let systemThemeQuery;
+function watchSystemTheme() {
+  if (systemThemeQuery || !window.matchMedia) return;
+  systemThemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+  systemThemeQuery.addEventListener?.('change', () => {
+    if (currentUserPreferences().theme === 'system') applyUserPreferences();
+  });
 }
 
 /* =========================================================
@@ -52,12 +87,17 @@ function getPageInfo(role, key) {
 function sidebarHTML(session, activePage) {
   const menu = MENUS[session.role] || [];
 
-  const items = menu.map((item) => `
+  const items = menu.map((item) => {
+    const href = activePage === 'preferences'
+      ? (item.key === 'preferences' ? 'preferences.html' : `${session.role}/${item.href}`)
+      : item.href;
+    return `
     ${item.section ? `<p class="nav-section-title">${escapeHtml(item.section)}</p>` : ''}
-    <a class="nav-item ${item.key === activePage ? 'active' : ''}" href="${item.href}">
+    <a class="nav-item ${item.key === activePage ? 'active' : ''}" href="${href}">
       <i class="fa-solid ${item.icon}"></i>
       <span>${escapeHtml(item.label)}</span>
-    </a>`).join('');
+    </a>`;
+  }).join('');
 
   return `
     <div class="sidebar-brand">
@@ -296,6 +336,8 @@ function renderCssChart(canvas, items) {
    ========================================================= */
 
 document.addEventListener('DOMContentLoaded', () => {
+  watchSystemTheme();
+  applyUserPreferences();
   renderLayout();
   bindModalGlobalEvents();
 });

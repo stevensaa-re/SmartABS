@@ -151,11 +151,21 @@ const LocalAdapter = (() => {
           String(payload.phone || '').length > 40 || majors.some((major) => major.length > 40)) {
         throw new Error('Periksa batas panjang nama, alamat, telepon, atau jurusan sekolah.');
       }
+      const profileFields = {
+        npsn: String(payload.npsn || '').trim(),
+        principalName: String(payload.principalName || '').trim(),
+        email: String(payload.email || '').trim(),
+        website: String(payload.website || '').trim(),
+        accreditation: String(payload.accreditation || '').trim(),
+        foundedYear: String(payload.foundedYear || '').trim()
+      };
+      validateSchoolDetails(profileFields);
       const profile = {
         id: 'main',
         name,
         address: String(payload.address || '').trim(),
         phone: String(payload.phone || '').trim(),
+        ...profileFields,
         educationLevels,
         majors
       };

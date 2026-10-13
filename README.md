@@ -9,8 +9,11 @@ tersedia di bawah tidak boleh dianggap sudah siap dipakai.
 ## Fitur
 
 - Akses sesuai peran: admin, guru, dan siswa.
-- Pengaturan profil untuk satu sekolah: nama, alamat, telepon, jenjang, dan jurusan. Nama sekolah
-  tampil pada identitas halaman; jenjang dan jurusan yang dipilih menjadi opsi saat mengelola kelas.
+- Preferensi tampilan personal untuk setiap peran: tema terang/gelap/ikuti perangkat, warna aksen,
+  ukuran tampilan, dan kepadatan ringkas; preferensi disimpan lokal per akun pada perangkat.
+- Pengaturan sistem untuk satu sekolah: identitas, NPSN, kepala sekolah, alamat, kontak resmi,
+  website, akreditasi, tahun berdiri, jenjang, dan jurusan. Jenjang/jurusan menjadi opsi saat
+  mengelola kelas.
 - Pengelolaan kelas, siswa, guru, akun, jadwal pelajaran, dan pengumuman.
 - Biodata siswa meliputi NIS/NISN, kelas, jenis kelamin, tempat/tanggal lahir, alamat,
   nama orang tua/wali, dan kontak wali.
@@ -57,9 +60,9 @@ Mode `local` memakai `localStorage` browser dan hanya cocok untuk demo. Akun con
 
 4. Buat pengguna admin melalui Firebase Authentication, lalu buat dokumen `users/{uid}` yang
    sesuai di Firestore. Hubungkan akun guru/siswa dengan profil akademiknya sebelum digunakan.
-   Admin dapat mengatur satu profil sekolah dari menu **Profil Sekolah**; konfigurasi tersimpan
-   di `schoolSettings/main`, sedangkan data akademik tetap di koleksi utama seperti `students`
-   dan `attendance`.
+   Admin dapat mengatur identitas dan konfigurasi sekolah dari menu **Pengaturan Sistem**;
+   konfigurasi tersimpan di `schoolSettings/main`, sedangkan data akademik tetap di koleksi utama
+   seperti `students` dan `attendance`.
 5. Untuk database yang sudah berisi data, backup dahulu. Jangan menjalankan seed demo pada data
    produksi.
 
@@ -87,10 +90,12 @@ Migrasi profil sekolah dan biodata siswa hanya perlu dijalankan sekali:
 ```bash
 mysql -u smartabs_user -p smartabs < database/mysql/migrate-calendar-audit.sql
 mysql -u smartabs_user -p smartabs < database/mysql/migrate-school-student-profile.sql
+mysql -u smartabs_user -p smartabs < database/mysql/migrate-school-settings-details.sql
 ```
 
-Profil sekolah hanya satu per instalasi. NISN, tempat/tanggal lahir, alamat, serta informasi
-orang tua/wali adalah kolom opsional agar data siswa lama tetap dapat dipakai.
+Jalankan setiap migrasi hanya sekali dan sesuai urutan. Migrasi terakhir menambahkan detail resmi
+sekolah pada tabel profil. Profil sekolah hanya satu per instalasi. NISN, tempat/tanggal lahir,
+alamat, serta informasi orang tua/wali adalah kolom opsional agar data siswa lama tetap dapat dipakai.
 
 ## Keamanan dan konfigurasi privat
 

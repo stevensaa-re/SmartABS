@@ -65,12 +65,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   const schoolForm = document.getElementById('schoolForm');
   const educationBox = document.getElementById('educationLevels');
   let existingClasses = [];
+  document.getElementById('schoolFoundedYear').max = String(new Date().getFullYear());
   try {
     const [school, classes] = await Promise.all([API.getSchoolProfile(), API.getClasses()]);
     existingClasses = classes;
     document.getElementById('schoolName').value = school.name || '';
+    document.getElementById('schoolNpsn').value = school.npsn || '';
+    document.getElementById('schoolPrincipal').value = school.principalName || '';
     document.getElementById('schoolAddress').value = school.address || '';
     document.getElementById('schoolPhone').value = school.phone || '';
+    document.getElementById('schoolEmail').value = school.email || '';
+    document.getElementById('schoolWebsite').value = school.website || '';
+    document.getElementById('schoolAccreditation').value = school.accreditation || '';
+    document.getElementById('schoolFoundedYear').value = school.foundedYear || '';
     document.getElementById('schoolMajors').value = (school.majors || []).join(', ');
     renderEducationOptions(educationBox, school.educationLevels || ['SMA']);
     renderSchoolIdentityPreview();
@@ -98,8 +105,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const school = await API.updateSchoolProfile({
         name: document.getElementById('schoolName').value,
+        npsn: document.getElementById('schoolNpsn').value,
+        principalName: document.getElementById('schoolPrincipal').value,
         address: document.getElementById('schoolAddress').value,
         phone: document.getElementById('schoolPhone').value,
+        email: document.getElementById('schoolEmail').value,
+        website: document.getElementById('schoolWebsite').value,
+        accreditation: document.getElementById('schoolAccreditation').value,
+        foundedYear: document.getElementById('schoolFoundedYear').value,
         educationLevels,
         majors: splitSchoolMajors(document.getElementById('schoolMajors').value)
       });

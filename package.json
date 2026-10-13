@@ -25,6 +25,7 @@
       "js/**/*",
       "login.html",
       "index.html",
+      "preferences.html",
       "database/seed-data.js",
       "package.json"
     ],

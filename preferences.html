@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Preferensi Saya — SMARTABS</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/dashboard.css">
+  <link rel="stylesheet" href="css/responsive.css">
+  <script src="js/config.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/auth.js"></script>
+</head>
+<body data-page="preferences" data-login-target="login.html">
+<script>
+  const preferenceSession = Session.get();
+  if (preferenceSession) document.body.dataset.role = preferenceSession.role;
+</script>
+<script src="js/guard.js"></script>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+  <div class="main">
+    <header class="navbar" id="navbar"></header>
+    <main class="content">
+      <div class="page-head">
+        <div>
+          <h1>Preferensi Saya</h1>
+          <p>Atur tampilan SMARTABS sesuai kenyamananmu. Pilihan tersimpan khusus akunmu di perangkat ini.</p>
+        </div>
+      </div>
+
+      <section class="card">
+        <div class="card-header"><h3>Tema aplikasi</h3></div>
+        <div class="card-body preferences-options">
+          <label class="preference-option">
+            <input type="radio" name="theme" value="light">
+            <span><i class="fa-solid fa-sun"></i><strong>Terang</strong><small>Tampilan cerah untuk penggunaan siang hari.</small></span>
+          </label>
+          <label class="preference-option">
+            <input type="radio" name="theme" value="dark">
+            <span><i class="fa-solid fa-moon"></i><strong>Gelap</strong><small>Latar gelap untuk mengurangi silau.</small></span>
+          </label>
+          <label class="preference-option">
+            <input type="radio" name="theme" value="system">
+            <span><i class="fa-solid fa-circle-half-stroke"></i><strong>Ikuti perangkat</strong><small>Mengikuti mode terang/gelap perangkat.</small></span>
+          </label>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-header"><h3>Warna aksen</h3></div>
+        <div class="card-body preferences-options">
+          <label class="preference-choice"><input type="radio" name="accent" value="blue"><span class="accent-swatch blue"></span>Biru</label>
+          <label class="preference-choice"><input type="radio" name="accent" value="violet"><span class="accent-swatch violet"></span>Ungu</label>
+          <label class="preference-choice"><input type="radio" name="accent" value="teal"><span class="accent-swatch teal"></span>Hijau kebiruan</label>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-header"><h3>Kenyamanan membaca</h3></div>
+        <div class="card-body">
+          <div class="form-group">
+            <label for="fontSize">Ukuran tampilan</label>
+            <select class="form-control" id="fontSize">
+              <option value="small">Kecil — lebih banyak konten terlihat</option>
+              <option value="normal">Normal — disarankan</option>
+              <option value="large">Besar — lebih mudah dibaca</option>
+            </select>
+          </div>
+          <label class="preference-toggle">
+            <input type="checkbox" id="compactMode">
+            <span><strong>Tampilan ringkas</strong><small>Kurangi jarak antar menu dan baris tabel.</small></span>
+          </label>
+        </div>
+      </section>
+
+      <div class="preferences-actions">
+        <button class="btn btn-outline" id="resetPreferences" type="button">
+          <i class="fa-solid fa-rotate-left"></i> Kembalikan default
+        </button>
+        <span id="preferencesSaved" class="text-muted" aria-live="polite"></span>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="js/mock-data.js"></script>
+<script src="js/adapters/local.js"></script>
+<script src="js/adapters/mysql.js"></script>
+<script src="js/adapters/firebase.js"></script>
+<script src="js/api.js"></script>
+<script src="js/notifications.js"></script>
+<script src="js/app.js"></script>
+<script src="js/preferences.js"></script>
+</body>
+</html>

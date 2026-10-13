@@ -82,6 +82,37 @@ function initials(name) {
     .join('') || '?';
 }
 
+function validateSchoolDetails(fields) {
+  if (fields.npsn && !/^\d{8}$/.test(fields.npsn)) {
+    throw new Error('NPSN harus tepat 8 digit.');
+  }
+  if (fields.principalName.length > 120 || fields.email.length > 160 || fields.website.length > 200) {
+    throw new Error('Periksa batas panjang kepala sekolah, email, atau website.');
+  }
+  if (fields.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fields.email)) {
+    throw new Error('Format email resmi sekolah tidak valid.');
+  }
+  if (fields.website) {
+    let parsed;
+    try {
+      parsed = new URL(fields.website);
+    } catch {
+      throw new Error('Website sekolah harus berupa URL valid dengan http:// atau https://.');
+    }
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      throw new Error('Website sekolah harus menggunakan http:// atau https://.');
+    }
+  }
+  if (fields.accreditation && !['A', 'B', 'C', 'Belum Terakreditasi'].includes(fields.accreditation)) {
+    throw new Error('Pilihan akreditasi tidak valid.');
+  }
+  if (fields.foundedYear &&
+      (!/^\d{4}$/.test(fields.foundedYear) || Number(fields.foundedYear) < 1800 ||
+       Number(fields.foundedYear) > new Date().getFullYear())) {
+    throw new Error('Tahun berdiri harus antara 1800 dan tahun ini.');
+  }
+}
+
 /* ---------- Badge status ---------- */
 const STATUS_TONE = {
   'Hadir': 'success',
