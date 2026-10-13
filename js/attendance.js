@@ -34,15 +34,15 @@ let dataAbsensiGuru = [];
 let dataSiswaGuru = [];
 let semuaSiswaGuru = [];
 let schedulesGuru = [];
-let kelasAbsensi = [];
+let kelasGuru = [];
 let teacherQrSession = null;
 let teacherQrRotationTimer = null;
 let teacherQrCountdownTimer = null;
 let teacherAttendanceUnsubscribe = null;
 const HARI_JADWAL = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
 
-function labelKelas(className) {
-  const block = kelasAbsensi.find((kelas) => kelas.name === className)?.block;
+function labelKelasGuru(className) {
+  const block = kelasGuru.find((kelas) => kelas.name === className)?.block;
   return block ? `${className} · ${block}` : className;
 }
 
@@ -58,12 +58,12 @@ async function initAbsensiGuru() {
     API.getStudents()
   ]);
   schedulesGuru = schedules.filter((schedule) => !teacher || schedule.teacher === teacher.name);
-  kelasAbsensi = classes;
+  kelasGuru = classes;
   semuaSiswaGuru = students;
 
   const classSelect = document.getElementById('attendanceClass');
   classSelect.innerHTML = classes
-    .map((kelas) => `<option value="${escapeHtml(kelas.name)}">${escapeHtml(labelKelas(kelas.name))}</option>`)
+    .map((kelas) => `<option value="${escapeHtml(kelas.name)}">${escapeHtml(labelKelasGuru(kelas.name))}</option>`)
     .join('');
 
   /* Default: kelas yang diampu guru */
@@ -222,7 +222,7 @@ function renderTeacherQr() {
   });
   document.getElementById('qrSessionSubject').textContent = teacherQrSession.subject;
   document.getElementById('qrSessionInfo').textContent =
-    `${labelKelas(teacherQrSession.className)} · ${teacherQrSession.date} · QR diperbarui otomatis`;
+    `${labelKelasGuru(teacherQrSession.className)} · ${teacherQrSession.date} · QR diperbarui otomatis`;
   updateQrCountdown();
 }
 
@@ -332,7 +332,7 @@ function renderAbsensiGuru() {
             <td class="text-center">${index + 1}</td>
             <td class="text-muted">${escapeHtml(siswa.nis)}</td>
             <td class="cell-strong">${escapeHtml(siswa.name)}</td>
-            <td>${escapeHtml(labelKelas(siswa.className))}</td>
+            <td>${escapeHtml(labelKelasGuru(siswa.className))}</td>
             <td>${badge(status)}</td>
             <td>${escapeHtml(waktu)}</td>
             <td>
@@ -469,11 +469,7 @@ async function initAbsensiSiswa() {
 
   infoBox.innerHTML = loadingBlock();
 
-  const [student, classes] = await Promise.all([
-    API.getStudentByUserId(session.id),
-    API.getClasses()
-  ]);
-  kelasAbsensi = classes;
+  const student = await API.getStudentByUserId(session.id);
   if (!student) {
     infoBox.innerHTML = '';
     statusBox.className = 'attendance-status warn';
@@ -502,7 +498,7 @@ async function initAbsensiSiswa() {
   infoBox.innerHTML = `
     <div><span>Nama</span><strong>${escapeHtml(student.name)}</strong></div>
     <div><span>NIS</span><strong>${escapeHtml(student.nis)}</strong></div>
-    <div><span>Kelas / lokasi</span><strong>${escapeHtml(labelKelas(student.className))}</strong></div>
+    <div><span>Kelas</span><strong>${escapeHtml(student.className)}</strong></div>
     <div><span>Tanggal</span><strong>${escapeHtml(formatDateLong(today))}</strong></div>
     <div><span>Mata pelajaran tercatat</span><strong>${records.length}</strong></div>`;
 

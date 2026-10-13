@@ -135,7 +135,7 @@ const FirebaseAdapter = (() => {
       return await fn();
     } catch (error) {
       if (error && error.code === 'permission-denied') {
-        throw new Error('Firebase menolak aksi ini. Pastikan Anda masuk dengan akun yang sesuai dan deploy Firestore Rules terbaru untuk SMARTABS.');
+        throw new Error('Anda tidak memiliki izin untuk melakukan aksi ini.');
       }
       if (error && error.code === 'unavailable') {
         throw new Error('Tidak dapat terhubung ke Firebase. Periksa koneksi internet.');
@@ -330,17 +330,10 @@ const FirebaseAdapter = (() => {
       }
       const address = String(payload.address || '').trim();
       const phone = String(payload.phone || '').trim();
-      try {
-        await db.collection('schoolSettings').doc('main').set({
-          name, address, phone, ...profileFields, educationLevels, majors,
-          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
-      } catch (error) {
-        if (error && error.code === 'permission-denied') {
-          throw new Error('Profil tidak dapat disimpan karena akses Firestore ditolak. Pastikan akun Anda terdaftar sebagai admin aktif, lalu deploy Firestore Rules terbaru dari folder database/firebase.');
-        }
-        throw error;
-      }
+      await db.collection('schoolSettings').doc('main').set({
+        name, address, phone, ...profileFields, educationLevels, majors,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
       await writeAudit({
         action: 'update', entity: 'school', entityId: 'main',
         summary: 'Memperbarui profil dan konfigurasi jenjang sekolah.'
@@ -1039,13 +1032,7 @@ const FirebaseAdapter = (() => {
         expiresAt: firebase.firestore.Timestamp.fromMillis(now),
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-      } catch (error) {
-        if (error && error.code === 'permission-denied') {
-          throw new Error('Profil tidak dapat disimpan karena akses Firestore ditolak. Pastikan akun Anda terdaftar sebagai admin aktif, lalu deploy Firestore Rules terbaru dari folder database/firebase.');
-        }
-        throw error;
-      }
+      });
       const updated = await ref.get();
       const serverTime = updated.get('createdAt');
       if (!serverTime) throw new Error('Waktu server Firebase belum tersedia. Coba buka sesi lagi.');

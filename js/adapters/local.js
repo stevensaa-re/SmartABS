@@ -362,7 +362,7 @@ const LocalAdapter = (() => {
         throw new Error('Nama kelas sudah digunakan.');
       }
 
-      const item = { id: makeId('K'), capacity: 36, homeroom: '', block: '', ...payload };
+      const item = { id: makeId('K'), capacity: 36, homeroom: '', ...payload };
       classes.push(item);
       writeTable('classes', classes);
       return item;

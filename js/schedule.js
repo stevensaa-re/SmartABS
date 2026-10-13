@@ -8,12 +8,6 @@
 const HARI_SEKOLAH = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
 
 let daftarJadwal = [];
-let kelasBerdasarkanNama = new Map();
-
-function labelKelasDanBlok(className) {
-  const block = kelasBerdasarkanNama.get(className)?.block;
-  return block ? `${className} · ${block}` : className;
-}
 
 document.addEventListener('DOMContentLoaded', async () => {
   const page = document.body.dataset.page;
@@ -49,7 +43,6 @@ async function initJadwalAdmin() {
   tbody.innerHTML = loadingRow(6);
 
   const [schedules, classes] = await Promise.all([API.getSchedules(), API.getClasses()]);
-  kelasBerdasarkanNama = new Map(classes.map((kelas) => [kelas.name, kelas]));
 
   daftarJadwal = schedules;
 
@@ -112,7 +105,7 @@ function renderJadwalAdmin() {
             <td class="cell-strong">${escapeHtml(jadwal.start)} - ${escapeHtml(jadwal.end)}</td>
             <td>${escapeHtml(jadwal.subject)}</td>
             <td>${escapeHtml(jadwal.teacher)}</td>
-            <td>${escapeHtml(labelKelasDanBlok(jadwal.className))}</td>
+            <td>${escapeHtml(jadwal.className)}</td>
             <td colspan="2">
               <div class="action-btns">
                 <button class="btn-icon" data-action="edit" data-id="${escapeHtml(jadwal.id)}" title="Edit jadwal ${escapeHtml(jadwal.subject)}" aria-label="Edit jadwal ${escapeHtml(jadwal.subject)}">
@@ -255,12 +248,10 @@ async function initJadwalGuru() {
   tbody.innerHTML = loadingRow(4);
 
   try {
-    const [teacher, schedules, classes] = await Promise.all([
+    const [teacher, schedules] = await Promise.all([
       API.getTeacherByUsername(session.username),
-      API.getSchedules(),
-      API.getClasses()
+      API.getSchedules()
     ]);
-    kelasBerdasarkanNama = new Map(classes.map((kelas) => [kelas.name, kelas]));
     if (!teacher || teacher.status === 'Nonaktif') {
       tbody.innerHTML = emptyTableRow(4, 'Profil guru belum tersedia', 'Hubungi admin untuk menautkan akun ke data guru.');
       return;
@@ -292,15 +283,11 @@ async function initJadwalSiswa() {
 
   tbody.innerHTML = loadingRow(3);
 
-  const [student, classes] = await Promise.all([
-    API.getStudentByNis(session.nis),
-    API.getClasses()
-  ]);
-  kelasBerdasarkanNama = new Map(classes.map((kelas) => [kelas.name, kelas]));
+  const student = await API.getStudentByNis(session.nis);
   const className = student ? student.className : session.className;
 
   document.getElementById('scheduleSubtitle').textContent =
-    `Jadwal pelajaran kelas ${labelKelasDanBlok(className || '-')}.`;
+    `Jadwal pelajaran kelas ${className || '-'}.`;
 
   const semua = await API.getSchedules();
   daftarJadwal = semua.filter((jadwal) => jadwal.className === className);
@@ -350,7 +337,7 @@ function renderJadwalHarian(schedules, activeDay, teacherView = false) {
         <tr>
           <td class="cell-strong schedule-time">${escapeHtml(jadwal.start)} – ${escapeHtml(jadwal.end)}</td>
           <td class="cell-strong">${escapeHtml(jadwal.subject)}</td>
-          <td>${escapeHtml(teacherView ? labelKelasDanBlok(jadwal.className) : jadwal.teacher)}</td>
+          <td>${escapeHtml(teacherView ? jadwal.className : jadwal.teacher)}</td>
           ${teacherView ? `<td><a class="btn btn-outline schedule-attendance-link" href="attendance.html?scheduleId=${encodeURIComponent(jadwal.id)}">
             <i class="fa-solid fa-clipboard-check"></i> Buka absensi
           </a></td>` : ''}
