@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (document.body.dataset.page !== 'classes') return;
 
   const tbody = document.getElementById('classTableBody');
-  tbody.innerHTML = loadingRow(7);
+  tbody.innerHTML = loadingRow(8);
 
   try {
     const [classes, students] = await Promise.all([API.getClasses(), API.getStudents()]);
@@ -43,7 +43,8 @@ function renderKelas() {
   const tbody = document.getElementById('classTableBody');
 
   const hasil = daftarKelasAdmin.filter((kelas) =>
-    !keyword || kelas.name.toLowerCase().includes(keyword)
+    !keyword || kelas.name.toLowerCase().includes(keyword) ||
+      String(kelas.block || '').toLowerCase().includes(keyword)
   );
 
   tbody.innerHTML = hasil.length
@@ -53,6 +54,7 @@ function renderKelas() {
           <td class="cell-strong">${escapeHtml(kelas.name)}</td>
           <td>${escapeHtml(kelas.educationLevel || '')} ${escapeHtml(kelas.level)}</td>
           <td>${escapeHtml(kelas.major)}</td>
+          <td>${escapeHtml(kelas.block || 'Belum ditentukan')}</td>
           <td>${escapeHtml(kelas.homeroom || '-')}</td>
           <td><span class="badge badge-info">${hitungSiswa(kelas.name)} siswa</span></td>
           <td>
@@ -66,7 +68,7 @@ function renderKelas() {
             </div>
           </td>
         </tr>`).join('')
-    : emptyTableRow(7, 'Kelas tidak ditemukan', 'Coba ubah kata kunci pencarian.');
+    : emptyTableRow(8, 'Kelas tidak ditemukan', 'Coba ubah kata kunci pencarian.');
 
   document.getElementById('classCount').textContent = `${hasil.length} kelas ditampilkan`;
 
@@ -119,6 +121,7 @@ function openClassForm(id = null) {
       renderClassOptions(kelas.level, kelas.major);
       document.getElementById('classLevel').value = kelas.level;
       document.getElementById('classMajor').value = kelas.major;
+      document.getElementById('classBlock').value = kelas.block || '';
       document.getElementById('classHomeroom').value = kelas.homeroom || '';
     }
   }
@@ -134,6 +137,7 @@ async function simpanKelas(event) {
   const educationLevel = document.getElementById('classEducationLevel').value;
   const level    = document.getElementById('classLevel').value;
   const major    = document.getElementById('classMajor').value;
+  const block    = document.getElementById('classBlock').value;
   const homeroom = document.getElementById('classHomeroom').value.trim();
 
   if (name.length < 3) {
@@ -142,7 +146,7 @@ async function simpanKelas(event) {
   }
 
   try {
-    const payload = { name, educationLevel, level, major, homeroom };
+    const payload = { name, educationLevel, level, major, block, homeroom };
 
     if (id) {
       await API.updateClass(id, payload);

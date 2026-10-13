@@ -13,7 +13,7 @@ const safeArray = (data, key) => {
 router.use(requireRole('admin'));
 router.get('/', asyncHandler(async (_req, res) => {
   const [classes, students, teachers, schedules, announcements, attendance, permissions, calendarEvents] = await Promise.all([
-    query('SELECT id, name, education_level AS educationLevel, level, major, homeroom, capacity FROM classes'),
+    query('SELECT id, name, education_level AS educationLevel, level, major, block, homeroom, capacity FROM classes'),
     query(`SELECT s.nis, s.name, COALESCE(s.nisn, '') AS nisn, c.name AS className,
       s.gender, s.status, '' AS userId, s.phone, s.birth_place AS birthPlace,
       DATE_FORMAT(s.birth_date, '%Y-%m-%d') AS birthDate, s.address,
@@ -61,10 +61,11 @@ router.post('/restore', asyncHandler(async (req, res) => {
 
     for (const item of safeArray(backup.data, 'classes')) {
       assert(item.id && item.name && item.level && item.major, 'Backup memiliki data kelas yang tidak lengkap.');
-      await insert('classes', ['id', 'name', 'education_level', 'level', 'major', 'homeroom', 'capacity'],
+      await insert('classes', ['id', 'name', 'education_level', 'level', 'major', 'block', 'homeroom', 'capacity'],
         [String(item.id), String(item.name),
           oneOf(item.educationLevel, ['SD', 'SMP', 'SMA', 'SMK']) ? item.educationLevel : 'SMA',
-          String(item.level), String(item.major), String(item.homeroom || ''), Number(item.capacity) || 36]);
+          String(item.level), String(item.major), oneOf(item.block, ['', 'Blok A', 'Blok B']) ? item.block : '',
+          String(item.homeroom || ''), Number(item.capacity) || 36]);
     }
     for (const item of safeArray(backup.data, 'students')) {
       assert(/^\d{4,20}$/.test(String(item.nis || '')) && item.name && item.className, 'Backup memiliki data siswa yang tidak valid.');

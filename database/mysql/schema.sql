@@ -73,6 +73,7 @@ CREATE TABLE classes (
   education_level VARCHAR(10) NOT NULL DEFAULT 'SMA',
   level     VARCHAR(10)  NOT NULL,
   major     VARCHAR(30)  NOT NULL,
+  block     VARCHAR(20)  NOT NULL DEFAULT '',
   homeroom  VARCHAR(100) NOT NULL DEFAULT '',
   capacity  SMALLINT UNSIGNED NOT NULL DEFAULT 36,
   PRIMARY KEY (id),

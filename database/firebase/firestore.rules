@@ -130,7 +130,9 @@ service cloud.firestore {
     match /classes/{id} {
       allow read: if isAdmin() || teaches(resource.data.name)
         || (isSiswa() && resource.data.name == myClassName());
-      allow write: if isAdmin();
+      allow create, update: if isAdmin()
+        && request.resource.data.get('block', '') in ['', 'Blok A', 'Blok B'];
+      allow delete: if isAdmin();
     }
 
     match /schedules/{id} {

@@ -1,0 +1,4 @@
+USE smartabs;
+
+ALTER TABLE classes
+  ADD COLUMN block VARCHAR(20) NOT NULL DEFAULT '' AFTER major;
