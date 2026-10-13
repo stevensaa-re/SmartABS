@@ -15,8 +15,6 @@
 const API_CONTRACT = [
   /* auth */
   'login', 'logout',
-  /* school */
-  'getSchoolProfile', 'updateSchoolProfile',
   /* users */
   'getUsers', 'createUser', 'updateUser', 'deleteUser',
   /* teachers */

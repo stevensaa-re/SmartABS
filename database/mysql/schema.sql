@@ -15,7 +15,6 @@ SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS permissions;
 DROP TABLE IF EXISTS audit_logs;
 DROP TABLE IF EXISTS calendar_events;
-DROP TABLE IF EXISTS school_profile;
 DROP TABLE IF EXISTS attendance;
 DROP TABLE IF EXISTS schedules;
 DROP TABLE IF EXISTS announcements;
@@ -45,32 +44,11 @@ CREATE TABLE users (
 ) ENGINE=InnoDB;
 
 -- ---------------------------------------------------------
--- school_profile : konfigurasi untuk satu sekolah
--- ---------------------------------------------------------
-CREATE TABLE school_profile (
-  id               TINYINT UNSIGNED NOT NULL DEFAULT 1,
-  name             VARCHAR(160) NOT NULL DEFAULT '',
-  address          VARCHAR(500) NOT NULL DEFAULT '',
-  phone            VARCHAR(40) NOT NULL DEFAULT '',
-  npsn             CHAR(8) NOT NULL DEFAULT '',
-  principal_name   VARCHAR(120) NOT NULL DEFAULT '',
-  email            VARCHAR(160) NOT NULL DEFAULT '',
-  website          VARCHAR(200) NOT NULL DEFAULT '',
-  accreditation    VARCHAR(24) NOT NULL DEFAULT '',
-  founded_year     SMALLINT UNSIGNED NULL,
-  education_levels TEXT NOT NULL,
-  majors           TEXT NOT NULL,
-  updated_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (id)
-) ENGINE=InnoDB;
-
--- ---------------------------------------------------------
 -- classes : data kelas
 -- ---------------------------------------------------------
 CREATE TABLE classes (
   id        VARCHAR(20)  NOT NULL,
   name      VARCHAR(50)  NOT NULL,
-  education_level VARCHAR(10) NOT NULL DEFAULT 'SMA',
   level     VARCHAR(10)  NOT NULL,
   major     VARCHAR(30)  NOT NULL,
   homeroom  VARCHAR(100) NOT NULL DEFAULT '',
@@ -86,20 +64,12 @@ CREATE TABLE classes (
 CREATE TABLE students (
   nis      VARCHAR(20)  NOT NULL,
   name     VARCHAR(100) NOT NULL,
-  nisn     CHAR(10)     NULL,
   class_id VARCHAR(20)  NOT NULL,
   gender   ENUM('L','P') NOT NULL DEFAULT 'L',
   status   ENUM('Aktif','Nonaktif') NOT NULL DEFAULT 'Aktif',
   user_id  VARCHAR(20)  NULL,
   phone    VARCHAR(30)  NOT NULL DEFAULT '',
-  birth_place VARCHAR(100) NOT NULL DEFAULT '',
-  birth_date DATE NULL,
-  address VARCHAR(500) NOT NULL DEFAULT '',
-  father_name VARCHAR(100) NOT NULL DEFAULT '',
-  mother_name VARCHAR(100) NOT NULL DEFAULT '',
-  guardian_name VARCHAR(100) NOT NULL DEFAULT '',
   PRIMARY KEY (nis),
-  UNIQUE KEY uq_students_nisn (nisn),
   UNIQUE KEY uq_students_user (user_id),
   KEY idx_students_class (class_id),
   CONSTRAINT fk_students_class FOREIGN KEY (class_id) REFERENCES classes (id)

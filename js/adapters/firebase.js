@@ -167,31 +167,6 @@ const FirebaseAdapter = (() => {
     return normalized;
   }
 
-  function studentDetails(payload, { includeDefaults = false } = {}) {
-    const lengths = {
-      nisn: 10, birthPlace: 100, birthDate: 10, address: 500,
-      fatherName: 100, motherName: 100, guardianName: 100, phone: 30
-    };
-    const details = {};
-    Object.entries(lengths).forEach(([key, maxLength]) => {
-      if (!includeDefaults && payload[key] === undefined) return;
-      const value = String(payload[key] || '').trim();
-      if (value.length > maxLength) throw new Error(`${key} melebihi batas ${maxLength} karakter.`);
-      details[key] = value;
-    });
-    if (details.nisn && !/^\d{10}$/.test(details.nisn)) {
-      throw new Error('NISN harus terdiri dari 10 angka.');
-    }
-    if (details.birthDate) {
-      const date = new Date(`${details.birthDate}T00:00:00.000Z`);
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(details.birthDate) || Number.isNaN(date.getTime()) ||
-        date.toISOString().slice(0, 10) !== details.birthDate) {
-        throw new Error('Tanggal lahir tidak valid.');
-      }
-    }
-    return details;
-  }
-
   async function assignedClassName() {
     const session = Session.get();
     if (!session || !['guru', 'siswa'].includes(session.role)) return '';
@@ -273,73 +248,6 @@ const FirebaseAdapter = (() => {
       try { await init(); await auth.signOut(); } catch (error) { /* abaikan */ }
       return true;
     },
-
-    getSchoolProfile: () => run(async () => {
-      const snap = await db.collection('schoolSettings').doc('main').get();
-      return {
-        id: 'main',
-        name: snap.exists ? String(snap.data().name || '') : '',
-        address: snap.exists ? String(snap.data().address || '') : '',
-        phone: snap.exists ? String(snap.data().phone || '') : '',
-        npsn: snap.exists ? String(snap.data().npsn || '') : '',
-        principalName: snap.exists ? String(snap.data().principalName || '') : '',
-        email: snap.exists ? String(snap.data().email || '') : '',
-        website: snap.exists ? String(snap.data().website || '') : '',
-        accreditation: snap.exists ? String(snap.data().accreditation || '') : '',
-        foundedYear: snap.exists ? String(snap.data().foundedYear || '') : '',
-        educationLevels: snap.exists && Array.isArray(snap.data().educationLevels)
-          ? snap.data().educationLevels : ['SMA'],
-        majors: snap.exists && Array.isArray(snap.data().majors) ? snap.data().majors : []
-      };
-    }),
-
-    updateSchoolProfile: (payload) => run(async () => {
-      const name = String(payload.name || '').trim();
-      const educationLevels = [...new Set(payload.educationLevels || [])]
-        .filter((level) => ['SD', 'SMP', 'SMA', 'SMK'].includes(level));
-      const majors = [...new Set((payload.majors || []).map((major) => String(major).trim()).filter(Boolean))];
-      if (!name) throw new Error('Nama sekolah wajib diisi.');
-      if (!educationLevels.length) throw new Error('Pilih minimal satu jenjang pendidikan.');
-      if (name.length > 160 || String(payload.address || '').length > 500 ||
-          String(payload.phone || '').length > 40 || majors.some((major) => major.length > 40)) {
-        throw new Error('Periksa batas panjang nama, alamat, telepon, atau jurusan sekolah.');
-      }
-      const profileFields = {
-        npsn: String(payload.npsn || '').trim(),
-        principalName: String(payload.principalName || '').trim(),
-        email: String(payload.email || '').trim(),
-        website: String(payload.website || '').trim(),
-        accreditation: String(payload.accreditation || '').trim(),
-        foundedYear: String(payload.foundedYear || '').trim()
-      };
-      validateSchoolDetails(profileFields);
-
-      const classes = fromSnap(await col('classes').get());
-      if (classes.some((item) => !educationLevels.includes(item.educationLevel || 'SMA'))) {
-        throw new Error('Pindahkan kelas yang memakai jenjang tersebut sebelum menghapus jenjang dari profil sekolah.');
-      }
-      if (classes.some((item) =>
-        ['SMA', 'SMK'].includes(item.educationLevel || 'SMA') && item.major && !majors.includes(item.major))) {
-        throw new Error('Pindahkan kelas yang memakai jurusan tersebut sebelum menghapus jurusan dari profil sekolah.');
-      }
-
-      const uid = auth.currentUser?.uid;
-      const actor = uid ? await col('users').doc(uid).get() : null;
-      if (!actor?.exists || actor.data().role !== 'admin' || actor.data().status !== 'Aktif') {
-        throw new Error('Hanya admin aktif yang dapat mengubah profil sekolah.');
-      }
-      const address = String(payload.address || '').trim();
-      const phone = String(payload.phone || '').trim();
-      await db.collection('schoolSettings').doc('main').set({
-        name, address, phone, ...profileFields, educationLevels, majors,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
-      await writeAudit({
-        action: 'update', entity: 'school', entityId: 'main',
-        summary: 'Memperbarui profil dan konfigurasi jenjang sekolah.'
-      });
-      return { id: 'main', name, address, phone, ...profileFields, educationLevels, majors };
-    }),
 
     /* ---------------- USERS ---------------- */
 
@@ -558,14 +466,7 @@ const FirebaseAdapter = (() => {
 
     createStudent: (payload) => run(async () => {
       const nis = String(payload.nis);
-      if (!/^\d{4,20}$/.test(nis)) throw new Error('NIS harus berupa 4–20 angka.');
-      if (String(payload.name || '').trim().length < 3 || String(payload.name).trim().length > 100) {
-        throw new Error('Nama siswa harus 3–100 karakter.');
-      }
-      if (!['L', 'P'].includes(payload.gender || 'L')) throw new Error('Jenis kelamin tidak valid.');
-      if (!['Aktif', 'Nonaktif'].includes(payload.status || 'Aktif')) throw new Error('Status siswa tidak valid.');
       const className = await requireClass(payload.className);
-      const details = studentDetails(payload, { includeDefaults: true });
       const ref = col('students').doc(nis);
 
       if ((await ref.get()).exists) throw new Error('NIS sudah terdaftar.');
@@ -580,9 +481,7 @@ const FirebaseAdapter = (() => {
       }
 
       const { nis: _ignore, ...rest } = payload;
-      const data = {
-        userId: '', gender: 'L', status: 'Aktif', ...rest, ...details, className
-      };
+      const data = { userId: '', phone: '', gender: 'L', status: 'Aktif', ...rest, className };
       const batch = db.batch();
       batch.set(ref, data);
       if (userRef) batch.update(userRef, { nis });
@@ -600,14 +499,7 @@ const FirebaseAdapter = (() => {
 
       const current = snap.data();
       const { nis: _ignore, ...rest } = payload;
-      const details = studentDetails(payload);
-      if (rest.name !== undefined && (String(rest.name).trim().length < 3 || String(rest.name).trim().length > 100)) {
-        throw new Error('Nama siswa harus 3–100 karakter.');
-      }
-      if (rest.gender !== undefined && !['L', 'P'].includes(rest.gender)) throw new Error('Jenis kelamin tidak valid.');
-      if (rest.status !== undefined && !['Aktif', 'Nonaktif'].includes(rest.status)) throw new Error('Status siswa tidak valid.');
       if (rest.className !== undefined) rest.className = await requireClass(rest.className);
-      Object.assign(rest, details);
 
       if (rest.userId && rest.userId !== current.userId) {
         const linked = await col('students').where('userId', '==', rest.userId).limit(1).get();

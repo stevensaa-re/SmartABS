@@ -1,17 +1,14 @@
 const router = require('express').Router();
 const { query, queryOne } = require('../db');
 const { requireRole, assertCanAccessStudent } = require('../auth');
-const { asyncHandler, assert, str, oneOf, buildSet, HttpError, isValidDate } = require('../util');
+const { asyncHandler, assert, str, oneOf, buildSet, HttpError } = require('../util');
 
 const GENDERS = ['L', 'P'];
 const STATUSES = ['Aktif', 'Nonaktif'];
 
 const SELECT = `
   SELECT s.nis, s.name, c.name AS className, s.gender, s.status,
-         COALESCE(s.user_id, '') AS userId, s.phone, COALESCE(s.nisn, '') AS nisn,
-         s.birth_place AS birthPlace, DATE_FORMAT(s.birth_date, '%Y-%m-%d') AS birthDate,
-         s.address, s.father_name AS fatherName, s.mother_name AS motherName,
-         s.guardian_name AS guardianName
+         COALESCE(s.user_id, '') AS userId, s.phone
   FROM students s
   JOIN classes c ON c.id = s.class_id`;
 
@@ -37,13 +34,6 @@ function validate(body, { creating }) {
     gender: body.gender,
     status: body.status,
     phone: body.phone === undefined ? undefined : str(body.phone),
-    nisn: body.nisn === undefined ? undefined : str(body.nisn),
-    birthPlace: body.birthPlace === undefined ? undefined : str(body.birthPlace),
-    birthDate: body.birthDate === undefined ? undefined : str(body.birthDate),
-    address: body.address === undefined ? undefined : str(body.address),
-    fatherName: body.fatherName === undefined ? undefined : str(body.fatherName),
-    motherName: body.motherName === undefined ? undefined : str(body.motherName),
-    guardianName: body.guardianName === undefined ? undefined : str(body.guardianName),
     userId: body.userId
   };
 
@@ -53,13 +43,6 @@ function validate(body, { creating }) {
   if (data.gender !== undefined) assert(oneOf(data.gender, GENDERS), 'Jenis kelamin tidak valid.');
   if (data.status !== undefined) assert(oneOf(data.status, STATUSES), 'Status tidak valid.');
   if (data.phone !== undefined) assert(data.phone.length <= 30, 'No. HP terlalu panjang.');
-  if (data.nisn !== undefined) assert(!data.nisn || /^\d{10}$/.test(data.nisn), 'NISN harus terdiri dari 10 angka.');
-  if (data.birthPlace !== undefined) assert(data.birthPlace.length <= 100, 'Tempat lahir terlalu panjang.');
-  if (data.birthDate !== undefined) assert(!data.birthDate || isValidDate(data.birthDate), 'Tanggal lahir tidak valid.');
-  if (data.address !== undefined) assert(data.address.length <= 500, 'Alamat terlalu panjang.');
-  for (const key of ['fatherName', 'motherName', 'guardianName']) {
-    if (data[key] !== undefined) assert(data[key].length <= 100, 'Nama orang tua/wali terlalu panjang.');
-  }
   return data;
 }
 
@@ -84,16 +67,10 @@ router.post('/', requireRole('admin'), asyncHandler(async (req, res) => {
   const data = validate(req.body, { creating: true });
 
   await query(
-    `INSERT INTO students
-      (nis, name, nisn, class_id, gender, status, user_id, phone, birth_place, birth_date,
-       address, father_name, mother_name, guardian_name)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      data.nis, data.name, data.nisn || null, await classIdByName(data.className),
-      data.gender || 'L', data.status || 'Aktif', await resolveUserId(data.userId),
-      data.phone || '', data.birthPlace || '', data.birthDate || null, data.address || '',
-      data.fatherName || '', data.motherName || '', data.guardianName || ''
-    ]
+    `INSERT INTO students (nis, name, class_id, gender, status, user_id, phone)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [data.nis, data.name, await classIdByName(data.className), data.gender || 'L',
+     data.status || 'Aktif', await resolveUserId(data.userId), data.phone || '']
   );
   res.status(201).json(await queryOne(`${SELECT} WHERE s.nis = ?`, [data.nis]));
 }));
@@ -111,13 +88,6 @@ router.put('/:nis', requireRole('admin'), asyncHandler(async (req, res) => {
     gender: data.gender,
     status: data.status,
     phone: data.phone,
-    nisn: data.nisn === undefined ? undefined : (data.nisn || null),
-    birth_place: data.birthPlace,
-    birth_date: data.birthDate === undefined ? undefined : (data.birthDate || null),
-    address: data.address,
-    father_name: data.fatherName,
-    mother_name: data.motherName,
-    guardian_name: data.guardianName,
     user_id: data.userId === undefined ? undefined : await resolveUserId(data.userId)
   });
 

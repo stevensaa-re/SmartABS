@@ -18,7 +18,7 @@
   }
 
   if (!session) {
-    redirect(document.body.dataset.loginTarget || '../login.html');
+    redirect('../login.html');
     return;
   }
 

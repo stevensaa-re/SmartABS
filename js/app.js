@@ -17,9 +17,7 @@ const MENUS = {
     { key: 'calendar',      label: 'Kalender Akademik', icon: 'fa-calendar-check',  href: 'calendar.html' },
     { key: 'tools',         label: 'Impor, Backup & Audit', icon: 'fa-shield-halved', href: 'tools.html' },
     { key: 'announcements', label: 'Pengumuman',     icon: 'fa-bullhorn',           href: 'announcements.html' },
-    { key: 'reports',       label: 'Laporan',        icon: 'fa-chart-column',       href: 'reports.html' },
-    { key: 'school',        label: 'Pengaturan Sistem', icon: 'fa-gear',             href: 'school.html', section: 'PENGATURAN' },
-    { key: 'preferences',   label: 'Preferensi Saya', icon: 'fa-sliders',            href: '../preferences.html', section: 'PREFERENSI' }
+    { key: 'reports',       label: 'Laporan',        icon: 'fa-chart-column',       href: 'reports.html' }
   ],
   guru: [
     { key: 'dashboard',   label: 'Dashboard',         icon: 'fa-gauge-high',        href: 'dashboard.html' },
@@ -28,8 +26,7 @@ const MENUS = {
     { key: 'calendar',    label: 'Kalender Akademik', icon: 'fa-calendar-check',     href: 'calendar.html' },
     { key: 'students',    label: 'Data Siswa',        icon: 'fa-user-graduate',     href: 'students.html' },
     { key: 'permissions', label: 'Izin / Sakit / Alpa', icon: 'fa-file-circle-check', href: 'permissions.html' },
-    { key: 'reports',       label: 'Laporan',        icon: 'fa-chart-column',       href: 'reports.html' },
-    { key: 'preferences',   label: 'Preferensi Saya', icon: 'fa-sliders',           href: '../preferences.html', section: 'PREFERENSI' }
+    { key: 'reports',     label: 'Laporan',           icon: 'fa-chart-column',      href: 'reports.html' }
   ],
   siswa: [
     { key: 'dashboard',     label: 'Dashboard',         icon: 'fa-gauge-high',         href: 'dashboard.html' },
@@ -38,46 +35,13 @@ const MENUS = {
     { key: 'permissions',   label: 'Pengajuan Izin',    icon: 'fa-file-circle-plus',   href: 'permissions.html' },
     { key: 'schedule',      label: 'Jadwal',            icon: 'fa-calendar-days',      href: 'schedule.html' },
     { key: 'calendar',      label: 'Kalender Akademik', icon: 'fa-calendar-check',     href: 'calendar.html' },
-    { key: 'announcements', label: 'Pengumuman',     icon: 'fa-bullhorn',           href: 'announcements.html' },
-    { key: 'preferences',   label: 'Preferensi Saya', icon: 'fa-sliders',            href: '../preferences.html', section: 'PREFERENSI' }
+    { key: 'announcements', label: 'Pengumuman',        icon: 'fa-bullhorn',           href: 'announcements.html' }
   ]
 };
 
 function getPageInfo(role, key) {
   const list = MENUS[role] || [];
-  if (key === 'preferences') return { label: 'Preferensi Saya', icon: 'fa-sliders' };
   return list.find((item) => item.key === key) || { label: 'Dashboard', icon: 'fa-gauge-high' };
-}
-
-function currentUserPreferences() {
-  const session = Session.get();
-  if (!session) return {};
-  try {
-    const saved = JSON.parse(localStorage.getItem(`smartabs.preferences.${session.id}`) || '{}');
-    return saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
-  } catch (error) {
-    console.error('Preferensi tampilan tidak dapat dibaca:', error);
-    return {};
-  }
-}
-
-function applyUserPreferences() {
-  const prefs = currentUserPreferences();
-  const theme = ['light', 'dark'].includes(prefs.theme) ? prefs.theme
-    : (window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-  document.body.dataset.theme = theme;
-  document.body.dataset.accent = ['blue', 'violet', 'teal'].includes(prefs.accent) ? prefs.accent : 'blue';
-  document.body.dataset.fontSize = ['small', 'normal', 'large'].includes(prefs.fontSize) ? prefs.fontSize : 'normal';
-  document.body.dataset.density = ['comfortable', 'compact'].includes(prefs.density) ? prefs.density : 'comfortable';
-}
-
-let systemThemeQuery;
-function watchSystemTheme() {
-  if (systemThemeQuery || !window.matchMedia) return;
-  systemThemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
-  systemThemeQuery.addEventListener?.('change', () => {
-    if (currentUserPreferences().theme === 'system') applyUserPreferences();
-  });
 }
 
 /* =========================================================
@@ -87,17 +51,11 @@ function watchSystemTheme() {
 function sidebarHTML(session, activePage) {
   const menu = MENUS[session.role] || [];
 
-  const items = menu.map((item) => {
-    const href = activePage === 'preferences'
-      ? (item.key === 'preferences' ? 'preferences.html' : `${session.role}/${item.href}`)
-      : item.href;
-    return `
-    ${item.section ? `<p class="nav-section-title">${escapeHtml(item.section)}</p>` : ''}
-    <a class="nav-item ${item.key === activePage ? 'active' : ''}" href="${href}">
+  const items = menu.map((item) => `
+    <a class="nav-item ${item.key === activePage ? 'active' : ''}" href="${item.href}">
       <i class="fa-solid ${item.icon}"></i>
       <span>${escapeHtml(item.label)}</span>
-    </a>`;
-  }).join('');
+    </a>`).join('');
 
   return `
     <div class="sidebar-brand">
@@ -132,7 +90,7 @@ function navbarHTML(session, pageInfo) {
 
     <div class="navbar-title">
       <h2>${escapeHtml(pageInfo.label)}</h2>
-      <p>${escapeHtml(session.schoolName || 'SMARTABS')} · Smart Attendance System</p>
+      <p>SMARTABS — Smart Attendance System</p>
     </div>
 
     <div class="navbar-right">
@@ -168,19 +126,6 @@ function renderLayout() {
 
   if (sidebar) sidebar.innerHTML = sidebarHTML(session, page);
   if (navbar)  navbar.innerHTML = navbarHTML(session, pageInfo);
-
-  if (navbar) {
-    API.getSchoolProfile().then((school) => {
-      const current = Session.get();
-      if (!school.name || !current || current.id !== session.id) return;
-      current.schoolName = school.name;
-      Session.set(current, current.remember);
-      const subtitle = navbar.querySelector('.navbar-title p');
-      if (subtitle) subtitle.textContent = `${school.name} · Smart Attendance System`;
-    }).catch((error) => {
-      console.error('Gagal memuat identitas sekolah untuk layout:', error);
-    });
-  }
 
   document.title = `${pageInfo.label} — SMARTABS`;
 
@@ -336,8 +281,6 @@ function renderCssChart(canvas, items) {
    ========================================================= */
 
 document.addEventListener('DOMContentLoaded', () => {
-  watchSystemTheme();
-  applyUserPreferences();
   renderLayout();
   bindModalGlobalEvents();
 });

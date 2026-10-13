@@ -20,7 +20,6 @@ const LocalAdapter = (() => {
     permissions:   'smartabs_permissions',
     calendarEvents:'smartabs_calendar_events',
     auditLogs:     'smartabs_audit_logs',
-    schoolProfile: 'smartabs_school_profile',
     seed:          'smartabs_seed_version'
   };
 
@@ -58,7 +57,7 @@ const LocalAdapter = (() => {
 
     if (currentVersion !== SEED_VERSION || force) {
       Object.keys(STORAGE_KEYS).forEach((key) => {
-        if (!['seed', 'schoolProfile'].includes(key)) localStorage.removeItem(STORAGE_KEYS[key]);
+        if (key !== 'seed') localStorage.removeItem(STORAGE_KEYS[key]);
       });
 
       writeTable('users', MOCK_DATA.users);
@@ -123,55 +122,6 @@ const LocalAdapter = (() => {
     },
 
     async logout() { return true; },
-
-    async getSchoolProfile() {
-      await delay();
-      try {
-        return {
-          id: 'main',
-          educationLevels: ['SMA'],
-          majors: [],
-          ...JSON.parse(localStorage.getItem(STORAGE_KEYS.schoolProfile) || '{}')
-        };
-      } catch (error) {
-        console.error('Gagal membaca profil sekolah:', error);
-        throw new Error('Profil sekolah lokal tidak dapat dibaca.');
-      }
-    },
-
-    async updateSchoolProfile(payload) {
-      await delay();
-      const name = String(payload.name || '').trim();
-      const educationLevels = [...new Set(payload.educationLevels || [])]
-        .filter((level) => ['SD', 'SMP', 'SMA', 'SMK'].includes(level));
-      const majors = [...new Set((payload.majors || []).map((major) => String(major).trim()).filter(Boolean))];
-      if (!name) throw new Error('Nama sekolah wajib diisi.');
-      if (!educationLevels.length) throw new Error('Pilih minimal satu jenjang pendidikan.');
-      if (name.length > 160 || String(payload.address || '').length > 500 ||
-          String(payload.phone || '').length > 40 || majors.some((major) => major.length > 40)) {
-        throw new Error('Periksa batas panjang nama, alamat, telepon, atau jurusan sekolah.');
-      }
-      const profileFields = {
-        npsn: String(payload.npsn || '').trim(),
-        principalName: String(payload.principalName || '').trim(),
-        email: String(payload.email || '').trim(),
-        website: String(payload.website || '').trim(),
-        accreditation: String(payload.accreditation || '').trim(),
-        foundedYear: String(payload.foundedYear || '').trim()
-      };
-      validateSchoolDetails(profileFields);
-      const profile = {
-        id: 'main',
-        name,
-        address: String(payload.address || '').trim(),
-        phone: String(payload.phone || '').trim(),
-        ...profileFields,
-        educationLevels,
-        majors
-      };
-      localStorage.setItem(STORAGE_KEYS.schoolProfile, JSON.stringify(profile));
-      return profile;
-    },
 
     /* ---------------- USERS ---------------- */
 

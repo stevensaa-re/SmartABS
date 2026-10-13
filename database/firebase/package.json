@@ -3,8 +3,7 @@
   "version": "1.0.0",
   "main": "seed.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "test:single-school-rules": "node single-school-smoke.cjs"
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "",

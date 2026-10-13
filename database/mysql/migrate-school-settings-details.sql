@@ -1,9 +1,0 @@
-USE smartabs;
-
-ALTER TABLE school_profile
-  ADD COLUMN npsn CHAR(8) NOT NULL DEFAULT '' AFTER phone,
-  ADD COLUMN principal_name VARCHAR(120) NOT NULL DEFAULT '' AFTER npsn,
-  ADD COLUMN email VARCHAR(160) NOT NULL DEFAULT '' AFTER principal_name,
-  ADD COLUMN website VARCHAR(200) NOT NULL DEFAULT '' AFTER email,
-  ADD COLUMN accreditation VARCHAR(24) NOT NULL DEFAULT '' AFTER website,
-  ADD COLUMN founded_year SMALLINT UNSIGNED NULL AFTER accreditation;

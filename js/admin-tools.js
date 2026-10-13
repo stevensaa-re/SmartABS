@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 function updateImportHint() {
   const students = document.getElementById('importType').value === 'students';
   document.getElementById('importHint').textContent = students
-    ? 'Header wajib: nis,nama,kelas. Opsional: nisn,tempat_lahir,tanggal_lahir (YYYY-MM-DD),alamat,nama_ayah,nama_ibu,nama_wali,jenis_kelamin,no_hp.'
+    ? 'Header wajib: nis,nama,kelas. Opsional: jenis_kelamin (L/P),no_hp. Akun siswa ditautkan setelah impor dari Data Siswa.'
     : 'Header wajib: username,nama,kelas. Opsional: mata_pelajaran. Akun guru harus sudah dibuat dan aktif; impor tidak membuat akun/password.';
   resetImportPreview();
 }
@@ -99,14 +99,7 @@ async function previewImportFile() {
       const record = type === 'students' ? {
         nis: value('nis'), name: value('nama', ['name']), className: value('kelas', ['class']),
         gender: value('jenis_kelamin', ['gender', 'lp']).toUpperCase() || 'L',
-        phone: value('no_hp', ['phone', 'telepon']),
-        nisn: value('nisn'),
-        birthPlace: value('tempat_lahir', ['birth_place', 'birthplace']),
-        birthDate: value('tanggal_lahir', ['birth_date', 'birthdate']),
-        address: value('alamat', ['address']),
-        fatherName: value('nama_ayah', ['father_name', 'fathername']),
-        motherName: value('nama_ibu', ['mother_name', 'mothername']),
-        guardianName: value('nama_wali', ['guardian_name', 'guardianname'])
+        phone: value('no_hp', ['phone', 'telepon'])
       } : {
         username: value('username'), name: value('nama', ['name']),
         className: value('kelas', ['class']), subject: value('mata_pelajaran', ['subject', 'mapel'])
@@ -118,8 +111,6 @@ async function previewImportFile() {
         if (importLookups.students.some((student) => student.nis === record.nis) || seen.has(key)) errors.push('NIS duplikat');
         if (!['L', 'P'].includes(record.gender)) errors.push('jenis_kelamin harus L atau P');
         if (record.phone.length > 30) errors.push('no_hp terlalu panjang');
-        if (record.nisn && !/^\d{10}$/.test(record.nisn)) errors.push('NISN harus 10 angka');
-        if (record.birthDate && !/^\d{4}-\d{2}-\d{2}$/.test(record.birthDate)) errors.push('tanggal_lahir harus YYYY-MM-DD');
       } else {
         if (!/^[\w.-]{2,50}$/.test(record.username)) errors.push('username tidak valid');
         if (importLookups.teachers.some((teacher) => teacher.username.toLowerCase() === key) || seen.has(key)) errors.push('profil guru duplikat');
@@ -143,7 +134,7 @@ function renderImportPreview() {
   const valid = importRows.filter((row) => !row.errors.length);
   const sample = importRows.slice(0, 30);
   const keys = document.getElementById('importType').value === 'students'
-    ? [['nis', 'NIS'], ['nisn', 'NISN'], ['name', 'Nama'], ['className', 'Kelas'], ['gender', 'L/P']]
+    ? [['nis', 'NIS'], ['name', 'Nama'], ['className', 'Kelas'], ['gender', 'L/P']]
     : [['username', 'Username'], ['name', 'Nama'], ['className', 'Kelas'], ['subject', 'Mapel']];
   document.getElementById('importPreview').innerHTML = `
     <p class="text-muted">Berkas: ${escapeHtml(importFileName)} · ${importRows.length} baris · ${valid.length} siap · ${importRows.length - valid.length} bermasalah. Pratinjau dibatasi 30 baris.</p>
@@ -192,7 +183,7 @@ async function runImport() {
 function downloadTemplate() {
   const type = document.getElementById('importType').value;
   const content = type === 'students'
-    ? 'nis,nisn,nama,kelas,jenis_kelamin,tempat_lahir,tanggal_lahir,alamat,nama_ayah,nama_ibu,nama_wali,no_hp\n20260001,1234567890,Nama Siswa,XI IPA 1,L,Bandung,2008-04-12,Jl. Contoh 1,Bapak Contoh,Ibu Contoh,,081234567890\n'
+    ? 'nis,nama,kelas,jenis_kelamin,no_hp\n20260001,Nama Siswa,XI IPA 1,L,081234567890\n'
     : 'username,nama,kelas,mata_pelajaran\nguru01,Nama Guru,XI IPA 1,Matematika\n';
   const url = URL.createObjectURL(new Blob(['\uFEFF', content], { type: 'text/csv;charset=utf-8' }));
   const link = document.createElement('a');
