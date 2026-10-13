@@ -8,37 +8,37 @@
 
 const MENUS = {
   admin: [
-    { key: 'dashboard',     label: 'Dashboard',      icon: 'fa-gauge-high',         href: 'dashboard.html', section: 'RINGKASAN' },
-    { key: 'users',         label: 'Data Pengguna',  icon: 'fa-users-gear',         href: 'users.html', section: 'DATA SEKOLAH' },
+    { key: 'dashboard',     label: 'Dashboard',      icon: 'fa-gauge-high',         href: 'dashboard.html' },
+    { key: 'users',         label: 'Data Pengguna',  icon: 'fa-users-gear',         href: 'users.html' },
     { key: 'students',      label: 'Data Siswa',     icon: 'fa-user-graduate',      href: 'students.html' },
     { key: 'teachers',      label: 'Data Guru',      icon: 'fa-chalkboard-user',    href: 'teachers.html' },
     { key: 'classes',       label: 'Data Kelas',     icon: 'fa-school',             href: 'classes.html' },
-    { key: 'schedule',      label: 'Jadwal',         icon: 'fa-calendar-days',      href: 'schedule.html', section: 'AKADEMIK' },
+    { key: 'schedule',      label: 'Jadwal',         icon: 'fa-calendar-days',      href: 'schedule.html' },
     { key: 'calendar',      label: 'Kalender Akademik', icon: 'fa-calendar-check',  href: 'calendar.html' },
-    { key: 'tools',         label: 'Impor, Backup & Audit', icon: 'fa-shield-halved', href: 'tools.html', section: 'LAINNYA' },
+    { key: 'tools',         label: 'Impor, Backup & Audit', icon: 'fa-shield-halved', href: 'tools.html' },
     { key: 'announcements', label: 'Pengumuman',     icon: 'fa-bullhorn',           href: 'announcements.html' },
     { key: 'reports',       label: 'Laporan',        icon: 'fa-chart-column',       href: 'reports.html' },
-    { key: 'school',        label: 'Pengaturan Sistem', icon: 'fa-gear',             href: 'school.html', section: 'PENGATURAN SISTEM' },
+    { key: 'school',        label: 'Pengaturan Sistem', icon: 'fa-gear',             href: 'school.html', section: 'PENGATURAN' },
     { key: 'preferences',   label: 'Preferensi Saya', icon: 'fa-sliders',            href: '../preferences.html', section: 'PREFERENSI' }
   ],
   guru: [
-    { key: 'dashboard',   label: 'Dashboard',         icon: 'fa-gauge-high',        href: 'dashboard.html', section: 'RINGKASAN' },
-    { key: 'attendance',  label: 'Absensi',           icon: 'fa-clipboard-check',   href: 'attendance.html', section: 'KEGIATAN MENGAJAR' },
+    { key: 'dashboard',   label: 'Dashboard',         icon: 'fa-gauge-high',        href: 'dashboard.html' },
+    { key: 'attendance',  label: 'Absensi',           icon: 'fa-clipboard-check',   href: 'attendance.html' },
     { key: 'schedule',    label: 'Jadwal Mengajar',   icon: 'fa-calendar-days',     href: 'schedule.html' },
     { key: 'calendar',    label: 'Kalender Akademik', icon: 'fa-calendar-check',     href: 'calendar.html' },
-    { key: 'students',    label: 'Data Siswa',        icon: 'fa-user-graduate',     href: 'students.html', section: 'DATA & LAPORAN' },
+    { key: 'students',    label: 'Data Siswa',        icon: 'fa-user-graduate',     href: 'students.html' },
     { key: 'permissions', label: 'Izin / Sakit / Alpa', icon: 'fa-file-circle-check', href: 'permissions.html' },
     { key: 'reports',       label: 'Laporan',        icon: 'fa-chart-column',       href: 'reports.html' },
     { key: 'preferences',   label: 'Preferensi Saya', icon: 'fa-sliders',           href: '../preferences.html', section: 'PREFERENSI' }
   ],
   siswa: [
-    { key: 'dashboard',     label: 'Dashboard',      icon: 'fa-gauge-high',         href: 'dashboard.html', section: 'RINGKASAN' },
-    { key: 'attendance',    label: 'Absensi',           icon: 'fa-fingerprint',        href: 'attendance.html', section: 'KEHADIRAN' },
+    { key: 'dashboard',     label: 'Dashboard',         icon: 'fa-gauge-high',         href: 'dashboard.html' },
+    { key: 'attendance',    label: 'Absensi',           icon: 'fa-fingerprint',        href: 'attendance.html' },
     { key: 'history',       label: 'Riwayat Kehadiran', icon: 'fa-clock-rotate-left',  href: 'history.html' },
-    { key: 'permissions',   label: 'Pengajuan Izin',    icon: 'fa-file-circle-plus',   href: 'permissions.html', section: 'AKADEMIK' },
+    { key: 'permissions',   label: 'Pengajuan Izin',    icon: 'fa-file-circle-plus',   href: 'permissions.html' },
     { key: 'schedule',      label: 'Jadwal',            icon: 'fa-calendar-days',      href: 'schedule.html' },
     { key: 'calendar',      label: 'Kalender Akademik', icon: 'fa-calendar-check',     href: 'calendar.html' },
-    { key: 'announcements', label: 'Pengumuman',     icon: 'fa-bullhorn',           href: 'announcements.html', section: 'INFORMASI' },
+    { key: 'announcements', label: 'Pengumuman',     icon: 'fa-bullhorn',           href: 'announcements.html' },
     { key: 'preferences',   label: 'Preferensi Saya', icon: 'fa-sliders',            href: '../preferences.html', section: 'PREFERENSI' }
   ]
 };
@@ -93,7 +93,7 @@ function sidebarHTML(session, activePage) {
       : item.href;
     return `
     ${item.section ? `<p class="nav-section-title">${escapeHtml(item.section)}</p>` : ''}
-    <a class="nav-item ${item.key === activePage ? 'active' : ''}" href="${href}"${item.key === activePage ? ' aria-current="page"' : ''}>
+    <a class="nav-item ${item.key === activePage ? 'active' : ''}" href="${href}">
       <i class="fa-solid ${item.icon}"></i>
       <span>${escapeHtml(item.label)}</span>
     </a>`;
@@ -168,7 +168,6 @@ function renderLayout() {
 
   if (sidebar) sidebar.innerHTML = sidebarHTML(session, page);
   if (navbar)  navbar.innerHTML = navbarHTML(session, pageInfo);
-  renderMobileQuickNav(session, page);
 
   if (navbar) {
     API.getSchoolProfile().then((school) => {
@@ -186,35 +185,6 @@ function renderLayout() {
   document.title = `${pageInfo.label} — SMARTABS`;
 
   bindLayoutEvents();
-}
-
-function renderMobileQuickNav(session, activePage) {
-  const layout = document.querySelector('.layout');
-  if (!layout) return;
-
-  layout.querySelector('.mobile-quick-nav')?.remove();
-  const routes = session.role === 'admin'
-    ? ['dashboard', 'students', 'schedule']
-    : ['dashboard', 'attendance', 'schedule'];
-  const menu = MENUS[session.role] || [];
-  const links = routes.map((route) => menu.find((item) => item.key === route)).filter(Boolean);
-  const quickNav = document.createElement('nav');
-  quickNav.className = 'mobile-quick-nav';
-  quickNav.setAttribute('aria-label', 'Navigasi cepat');
-  quickNav.innerHTML = `${links.map((item) => {
-    const href = activePage === 'preferences' ? `${session.role}/${item.href}` : item.href;
-    const label = item.key === 'dashboard' ? 'Beranda' : item.label.replace(' Mengajar', '');
-    return `<a class="mobile-quick-link ${item.key === activePage ? 'active' : ''}" href="${href}"${item.key === activePage ? ' aria-current="page"' : ''}>
-      <i class="fa-solid ${item.icon}" aria-hidden="true"></i><span>${escapeHtml(label)}</span>
-    </a>`;
-  }).join('')}
-    <button class="mobile-quick-link mobile-quick-menu" type="button" aria-label="Buka semua menu" aria-controls="sidebar">
-      <i class="fa-solid fa-ellipsis" aria-hidden="true"></i><span>Menu</span>
-    </button>`;
-  layout.append(quickNav);
-  quickNav.querySelector('.mobile-quick-menu')?.addEventListener('click', () => {
-    document.getElementById('menuToggle')?.click();
-  });
 }
 
 function bindLayoutEvents() {
