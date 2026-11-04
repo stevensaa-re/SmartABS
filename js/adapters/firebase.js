@@ -1153,12 +1153,18 @@ const FirebaseAdapter = (() => {
       const firebaseUser = auth.currentUser;
       if (!firebaseUser) throw new Error('Sesi Firebase berakhir. Silakan login kembali.');
       const actorSnap = await col('users').doc(firebaseUser.uid).get();
-      if (!actorSnap.exists) throw new Error('Profil petugas tidak ditemukan.');
+      if (!actorSnap.exists || actorSnap.data().status !== 'Aktif' ||
+          !['admin', 'guru'].includes(actorSnap.data().role)) {
+        throw new Error('Profil petugas aktif tidak ditemukan.');
+      }
       const actorName = actorSnap.data().name || '';
 
       const result = await db.runTransaction(async (transaction) => {
         const permissionSnap = await transaction.get(permRef);
         if (!permissionSnap.exists) throw new Error('Pengajuan tidak ditemukan.');
+        if (permissionSnap.data().status !== 'Menunggu') {
+          throw new Error('Pengajuan ini sudah pernah diputuskan.');
+        }
         const item = { id, ...permissionSnap.data(), status };
         const attRef = col('attendance').doc(`${item.date}_${item.studentId}`);
         const attSnap = await transaction.get(attRef);
@@ -1176,6 +1182,8 @@ const FirebaseAdapter = (() => {
             name: item.name,
             className: item.className,
             date: item.date,
+            source: 'permission',
+            permissionId: id,
             time: '-',
             status: attendanceStatus,
             note: attendanceNote,

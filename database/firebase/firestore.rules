@@ -98,13 +98,37 @@ service cloud.firestore {
       return request.resource.data.lastChangeId is string
         && request.resource.data.updatedAt == request.time
         && existsAfter(/databases/$(database)/documents/attendance/$(id)/history/$(request.resource.data.lastChangeId))
-        && getAfter(/databases/$(database)/documents/attendance/$(id)/history/$(request.resource.data.lastChangeId)).data.actorUid == request.auth.uid
-        && getAfter(/databases/$(database)/documents/attendance/$(id)/history/$(request.resource.data.lastChangeId)).data.studentId == request.resource.data.studentId
-        && getAfter(/databases/$(database)/documents/attendance/$(id)/history/$(request.resource.data.lastChangeId)).data.className == request.resource.data.className
-        && getAfter(/databases/$(database)/documents/attendance/$(id)/history/$(request.resource.data.lastChangeId)).data.date == request.resource.data.date
-        && getAfter(/databases/$(database)/documents/attendance/$(id)/history/$(request.resource.data.lastChangeId)).data.nextStatus == request.resource.data.status
-        && getAfter(/databases/$(database)/documents/attendance/$(id)/history/$(request.resource.data.lastChangeId)).data.nextNote == request.resource.data.note
-        && getAfter(/databases/$(database)/documents/attendance/$(id)/history/$(request.resource.data.lastChangeId)).data.createdAt == request.time;
+        && matchingAttendanceHistory(id, request.resource.data.lastChangeId);
+    }
+    function matchingAttendanceHistory(id, changeId) {
+      let history = getAfter(/databases/$(database)/documents/attendance/$(id)/history/$(changeId)).data;
+      return history.actorUid == request.auth.uid
+        && history.studentId == request.resource.data.studentId
+        && history.className == request.resource.data.className
+        && history.date == request.resource.data.date
+        && history.nextStatus == request.resource.data.status
+        && history.nextNote == request.resource.data.note
+        && history.createdAt == request.time;
+    }
+    function validPermissionAttendance(id) {
+      return (isAdmin() || teaches(request.resource.data.className))
+        && request.resource.data.source == 'permission'
+        && request.resource.data.permissionId is string
+        && id == request.resource.data.date + '_' + request.resource.data.studentId
+        && matchingReviewedPermission(request.resource.data.permissionId)
+        && request.resource.data.createdAt == request.time
+        && hasAttendanceHistory(id);
+    }
+    function matchingReviewedPermission(permissionId) {
+      let permission = get(
+        /databases/$(database)/documents/permissions/$(permissionId)
+      ).data;
+      return permission.status in ['Disetujui', 'Ditolak']
+        && permission.studentId == request.resource.data.studentId
+        && permission.className == request.resource.data.className
+        && permission.date == request.resource.data.date
+        && ((permission.status == 'Disetujui' && request.resource.data.status == permission.type)
+          || (permission.status == 'Ditolak' && request.resource.data.status == 'Alpa'));
     }
     function validManualAttendance(id) {
       return isStaff()
@@ -198,15 +222,21 @@ service cloud.firestore {
         || (isSiswa() && myNis() != '' && id.matches('.*_' + myNis() + '$'))
         || (isSiswa() && resource.data.studentId == myNis());
 
-      allow create: if validManualAttendance(id) || validQrAttendance(id);
-      allow update: if validManualAttendance(id)
+      allow create: if (request.resource.data.source == 'permission' && validPermissionAttendance(id))
+        || validManualAttendance(id)
+        || validQrAttendance(id);
+      allow update: if (validPermissionAttendance(id)
+        && resource.data.studentId == request.resource.data.studentId
+        && resource.data.date == request.resource.data.date
+        && resource.data.className == request.resource.data.className)
+        || (validManualAttendance(id)
         && resource.data.studentId == request.resource.data.studentId
         && resource.data.date == request.resource.data.date
         && (isAdmin() || (isGuru()
           && resource.data.teacherUid == request.auth.uid
           && request.resource.data.teacherUid == request.auth.uid))
         && request.resource.data.studentId == resource.data.studentId
-        && request.resource.data.className == resource.data.className;
+        && request.resource.data.className == resource.data.className);
       allow delete: if false;
 
       // Absensi QR: satu dokumen per siswa per sesi, divalidasi terhadap token
@@ -293,9 +323,11 @@ service cloud.firestore {
     match /permissions/{id} {
       allow read: if isAdmin() || teaches(resource.data.className)
         || (isSiswa() && resource.data.studentId == myNis());
-      allow update: if (isAdmin() || (teaches(resource.data.className)
-        && teaches(request.resource.data.className)))
-        && request.resource.data.status in ['Menunggu', 'Disetujui', 'Ditolak'];
+      allow update: if resource.data.status == 'Menunggu'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && request.resource.data.status in ['Disetujui', 'Ditolak']
+        && (isAdmin() || (teaches(resource.data.className)
+          && teaches(request.resource.data.className)));
       allow delete: if isAdmin() || teaches(resource.data.className);
 
       allow create: if isAdmin()

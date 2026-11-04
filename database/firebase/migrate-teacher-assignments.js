@@ -2,13 +2,14 @@ const admin = require('firebase-admin');
 
 const apply = process.argv.includes('--apply');
 const confirmation = process.argv.find((arg) => arg.startsWith('--confirm-project='))?.split('=')[1];
+const projectId = process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT;
 
-admin.initializeApp({ credential: admin.credential.applicationDefault() });
+if (!projectId) throw new Error('Set GCLOUD_PROJECT to the exact Firebase project ID.');
+
+admin.initializeApp({ credential: admin.credential.applicationDefault(), projectId });
 
 async function migrate() {
   const db = admin.firestore();
-  const projectId = admin.app().options.projectId;
-  if (!projectId) throw new Error('Project ID is unavailable; set GCLOUD_PROJECT before running.');
   if (apply && confirmation !== projectId) {
     throw new Error(`Apply requires --confirm-project=${projectId}. No data was changed.`);
   }
@@ -41,7 +42,8 @@ async function migrate() {
       throw new Error(`Multiple teacher profiles are linked to ${username}; resolve this before migration.`);
     }
     linkedTeacherUids.add(user.id);
-    classAssignments.set(user.id, String(teacher.get('className') || ''));
+    const className = String(teacher.get('className') || '');
+    if (user.get('className') !== className) classAssignments.set(user.id, className);
 
     const name = String(teacher.get('name') || '').trim();
     if (!name) continue;
