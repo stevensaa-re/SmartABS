@@ -123,6 +123,8 @@ Firebase web yang sama seperti `js/config.js`; konfigurasi Firebase klien memang
 tetapi jangan sertakan service-account key atau `.env`. Pada GitHub, workflow
 `.github/workflows/desktop.yml` dapat dijalankan manual untuk menghasilkan artifacts atau
 dipicu dengan tag `desktop-v*` untuk mengunggah kedua `.exe` ke GitHub Release.
+Desktop mengizinkan kamera hanya untuk halaman SMARTABS lokal agar pemindaian QR absensi berfungsi;
+akses mikrofon dan permintaan izin dari origin lain tetap ditolak.
 
 ```text
 admin/                 Halaman admin

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell } = require('electron');
+const { app, BrowserWindow, session, shell } = require('electron');
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -36,7 +36,7 @@ function startSiteServer() {
         'Content-Type': contentTypes[path.extname(file).toLowerCase()] || 'application/octet-stream',
         'Content-Length': stats.size,
         'X-Content-Type-Options': 'nosniff',
-        'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; frame-src https://*.firebaseapp.com https://accounts.google.com"
+        'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; frame-src https://*.firebaseapp.com https://accounts.google.com"
       });
       if (request.method === 'HEAD') { response.end(); return; }
       fs.createReadStream(file).pipe(response);
@@ -53,6 +53,22 @@ function startSiteServer() {
 
 async function createWindow() {
   const { server, url } = await startSiteServer();
+  const localOrigin = new URL(url).origin;
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
+    const requestingUrl = details && details.requestingUrl;
+    const requestingOrigin = requestingUrl && URL.canParse(requestingUrl)
+      ? new URL(requestingUrl).origin
+      : '';
+    const mediaTypes = details && Array.isArray(details.mediaTypes) ? details.mediaTypes : [];
+    const cameraOnly = permission === 'media' &&
+      mediaTypes.includes('video') &&
+      !mediaTypes.includes('audio');
+    callback(
+      cameraOnly &&
+      requestingOrigin === localOrigin &&
+      webContents.getURL().startsWith(localOrigin)
+    );
+  });
   const window = new BrowserWindow({
     width: 1280,
     height: 820,

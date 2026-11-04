@@ -179,6 +179,21 @@ const FirebaseAdapter = (() => {
     return student.exists ? String(student.data().className || '') : '';
   }
 
+  async function resolveTeacherUid(teacherName) {
+    const name = String(teacherName || '').trim();
+    if (!name) throw new Error('Pilih guru yang akan mengajar jadwal ini.');
+    const teachers = await col('teachers').where('name', '==', name).limit(2).get();
+    if (teachers.empty) throw new Error(`Profil guru "${name}" tidak ditemukan.`);
+    if (teachers.size > 1) throw new Error(`Nama guru "${name}" tidak unik. Perbarui data guru sebelum membuat jadwal.`);
+    const username = String(teachers.docs[0].get('username') || '').trim().toLowerCase();
+    if (!username) throw new Error(`Akun guru "${name}" belum ditautkan.`);
+    const users = await col('users').where('usernameLower', '==', username).limit(2).get();
+    if (users.size !== 1 || users.docs[0].get('role') !== 'guru' || users.docs[0].get('status') !== 'Aktif') {
+      throw new Error(`Akun aktif untuk guru "${name}" tidak ditemukan.`);
+    }
+    return users.docs[0].id;
+  }
+
   const loginEmail = (username) =>
     `${String(username).trim().toLowerCase()}@${APP_CONFIG.FIREBASE_LOGIN_DOMAIN}`;
   const validEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || '').trim());
@@ -618,24 +633,32 @@ const FirebaseAdapter = (() => {
     getSchedules: () => run(async () => {
       const className = await assignedClassName();
       const session = Session.get();
-      const ref = session && ['guru', 'siswa'].includes(session.role)
-        ? col('schedules').where('className', '==', className || '__unassigned__')
-        : col('schedules');
+      const ref = session?.role === 'guru'
+        ? col('schedules').where('teacherUid', '==', auth.currentUser.uid)
+        : session?.role === 'siswa'
+          ? col('schedules').where('className', '==', className || '__unassigned__')
+          : col('schedules');
       return fromSnap(await ref.get());
     }),
 
     createSchedule: (payload) => run(async () => {
-      const ref = await col('schedules').add(payload);
+      const data = { ...payload, teacherUid: await resolveTeacherUid(payload.teacher) };
+      const ref = await col('schedules').add(data);
       await writeAudit({ action: 'create', entity: 'schedule', entityId: ref.id,
-        summary: `Menambahkan jadwal ${payload.subject} untuk kelas ${payload.className}.` });
-      return { id: ref.id, ...payload };
+        summary: `Menambahkan jadwal ${data.subject} untuk kelas ${data.className}.` });
+      return { id: ref.id, ...data };
     }),
 
     updateSchedule: (id, payload) => run(async () => {
-      await col('schedules').doc(id).update(payload);
+      const ref = col('schedules').doc(id);
+      const current = await ref.get();
+      if (!current.exists) throw new Error('Jadwal tidak ditemukan.');
+      const data = { ...payload };
+      if (data.teacher !== undefined) data.teacherUid = await resolveTeacherUid(data.teacher);
+      await ref.update(data);
       await writeAudit({ action: 'update', entity: 'schedule', entityId: id,
         summary: `Memperbarui jadwal ${payload.subject || id}.` });
-      return fromDoc(await col('schedules').doc(id).get());
+      return fromDoc(await ref.get());
     }),
 
     deleteSchedule: (id) => run(async () => {
@@ -685,10 +708,9 @@ const FirebaseAdapter = (() => {
     getAttendanceRange: (from, to, className = null) => run(async () => {
       let ref = col('attendance');
       const session = Session.get();
-      const assigned = await assignedClassName();
       if (session && session.role === 'guru') {
-        if (!assigned || (className && className !== assigned)) return [];
-        ref = ref.where('className', '==', assigned);
+        ref = ref.where('teacherUid', '==', auth.currentUser.uid);
+        if (className) ref = ref.where('className', '==', className);
       } else if (className) {
         ref = ref.where('className', '==', className);
       }
@@ -701,10 +723,9 @@ const FirebaseAdapter = (() => {
     getAttendanceByDate: (date, className = null) => run(async () => {
       let ref = col('attendance').where('date', '==', date);
       const session = Session.get();
-      const assigned = await assignedClassName();
       if (session && session.role === 'guru') {
-        if (!assigned || (className && className !== assigned)) return [];
-        ref = ref.where('className', '==', assigned);
+        ref = ref.where('teacherUid', '==', auth.currentUser.uid);
+        if (className) ref = ref.where('className', '==', className);
       } else if (className) {
         ref = ref.where('className', '==', className);
       }
@@ -718,13 +739,9 @@ const FirebaseAdapter = (() => {
         if (cancelled) return;
         let ref = col('attendance').where('date', '==', date);
         const session = Session.get();
-        const assigned = await assignedClassName();
         if (session && session.role === 'guru') {
-          if (!assigned || (className && className !== assigned)) {
-            onData([]);
-            return;
-          }
-          ref = ref.where('className', '==', assigned);
+          ref = ref.where('teacherUid', '==', auth.currentUser.uid);
+          if (className) ref = ref.where('className', '==', className);
         } else if (className) {
           ref = ref.where('className', '==', className);
         }
@@ -778,10 +795,31 @@ const FirebaseAdapter = (() => {
         throw new Error('Siswa harus melakukan absensi melalui QR mata pelajaran yang aktif.');
       }
       const sessionId = String(payload.sessionId || '');
+      const scheduleId = String(payload.scheduleId || '');
+      let teacherUid = '';
+      if (userProfile.data().role === 'guru') {
+        if (!scheduleId) throw new Error('Pilih jadwal mata pelajaran yang menjadi kewenangan Anda.');
+        const schedule = await col('schedules').doc(scheduleId).get();
+        if (!schedule.exists || schedule.get('teacherUid') !== firebaseUser.uid ||
+            schedule.get('className') !== student.className ||
+            schedule.get('subject') !== String(payload.subject || '')) {
+          throw new Error('Jadwal, mata pelajaran, atau kelas tidak sesuai dengan penugasan Anda.');
+        }
+        teacherUid = firebaseUser.uid;
+      } else if (scheduleId) {
+        const schedule = await col('schedules').doc(scheduleId).get();
+        if (!schedule.exists || schedule.get('className') !== student.className ||
+            schedule.get('subject') !== String(payload.subject || '') ||
+            !String(schedule.get('teacherUid') || '')) {
+          throw new Error('Jadwal, mata pelajaran, atau kelas tidak cocok dengan siswa.');
+        }
+        teacherUid = String(schedule.get('teacherUid'));
+      }
       const dailyId = `${date}_${student.nis}`;
-      const id = String(payload.attendanceId || (sessionId ? `${sessionId}_${student.nis}` : dailyId));
+      const scheduleAttendanceId = scheduleId ? `${scheduleId}_${date}_${student.nis}` : dailyId;
+      const id = String(payload.attendanceId || (sessionId ? `${sessionId}_${student.nis}` : scheduleAttendanceId));
       if (sessionId && id !== `${sessionId}_${student.nis}`) throw new Error('ID catatan sesi absensi tidak cocok.');
-      if (!sessionId && id !== dailyId) throw new Error('ID catatan absensi tidak cocok.');
+      if (!sessionId && id !== scheduleAttendanceId) throw new Error('ID catatan absensi tidak cocok.');
 
       const ref = col('attendance').doc(id);
       const historyRef = ref.collection('history').doc();
@@ -801,10 +839,8 @@ const FirebaseAdapter = (() => {
           time: ['Hadir', 'Terlambat'].includes(status) ? currentTime() : '-',
           status,
           note,
-          ...(sessionId ? {
-            sessionId,
-            scheduleId: String(payload.scheduleId || '')
-          } : {}),
+          ...(sessionId ? { sessionId } : {}),
+          ...(scheduleId ? { scheduleId, teacherUid } : {}),
           lastChangeId: historyRef.id,
           createdAt: firebase.firestore.FieldValue.serverTimestamp(),
           updatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -889,6 +925,12 @@ const FirebaseAdapter = (() => {
       if (scheduleData.className !== payload.className || scheduleData.subject !== payload.subject) {
         throw new Error('Jadwal dan kelas tidak cocok.');
       }
+      if (profile.role === 'guru' && scheduleData.teacherUid !== firebaseUser.uid) {
+        throw new Error('Jadwal ini tidak ditugaskan kepada akun Anda.');
+      }
+      if (!String(scheduleData.teacherUid || '')) {
+        throw new Error('Jadwal belum memiliki akun guru yang ditautkan.');
+      }
 
       const date = String(payload.date || todayISO());
       let activeSessions = col('attendanceSessions')
@@ -916,7 +958,7 @@ const FirebaseAdapter = (() => {
         subject: scheduleData.subject,
         className: scheduleData.className,
         date,
-        teacherUid: firebaseUser.uid,
+        teacherUid: scheduleData.teacherUid,
         teacherName: scheduleData.teacher || profile.name || '',
         token,
         previousToken: '',
@@ -939,6 +981,7 @@ const FirebaseAdapter = (() => {
       return {
         id: ref.id,
         scheduleId: schedule.id,
+        teacherUid: scheduleData.teacherUid,
         subject: scheduleData.subject,
         className: scheduleData.className,
         date,
@@ -1012,10 +1055,14 @@ const FirebaseAdapter = (() => {
       if (student.status !== 'Aktif') throw new Error('Data siswa tidak aktif.');
       const sessionId = String(payload.sessionId || '');
       const token = String(payload.token || '');
-      if (!/^[A-Za-z0-9_-]{20,}$/.test(sessionId) || !/^[a-f0-9]{32}$/.test(token)) {
+      const scheduleId = String(payload.scheduleId || '');
+      const teacherUid = String(payload.teacherUid || '');
+      const date = String(payload.date || '');
+      if (!/^[A-Za-z0-9_-]{20,}$/.test(sessionId) || !/^[a-f0-9]{32}$/.test(token) ||
+          !/^[A-Za-z0-9_-]{1,128}$/.test(teacherUid) || !scheduleId ||
+          !/^\d{4}-\d{2}-\d{2}$/.test(date) || !String(payload.subject || '')) {
         throw new Error('QR absensi tidak valid.');
       }
-      const date = String(payload.date || '');
       const sessionStartedAtSeconds = Number(payload.sessionStartedAt && payload.sessionStartedAt.seconds);
       const sessionStartedAtNanos = Number(payload.sessionStartedAt && payload.sessionStartedAt.nanoseconds);
       if (!Number.isInteger(sessionStartedAtSeconds) || !Number.isInteger(sessionStartedAtNanos) ||
@@ -1025,7 +1072,8 @@ const FirebaseAdapter = (() => {
       const record = {
         sessionId,
         sessionToken: token,
-        scheduleId: String(payload.scheduleId || ''),
+        scheduleId,
+        teacherUid,
         subject: String(payload.subject || ''),
         studentId: student.nis,
         name: student.name,
@@ -1162,16 +1210,18 @@ const FirebaseAdapter = (() => {
     getReport: ({ from, to, className, subject, status } = {}) => run(async () => {
       let ref = col('attendance');
       const session = Session.get();
-      const assigned = await assignedClassName();
       if (session && session.role === 'guru') {
-        if (!assigned || (className && className !== assigned)) return [];
-        ref = ref.where('className', '==', assigned);
+        ref = ref.where('teacherUid', '==', auth.currentUser.uid);
       }
       if (from) ref = ref.where('date', '>=', from);
       if (to) ref = ref.where('date', '<=', to);
 
       let studentsRef = col('students');
-      if (session && session.role === 'guru') studentsRef = studentsRef.where('className', '==', assigned);
+      if (session && session.role === 'guru') {
+        const assigned = await assignedClassName();
+        if (!assigned || (className && className !== assigned)) return [];
+        studentsRef = studentsRef.where('className', '==', assigned);
+      }
       const [studentSnap, attendanceSnap] = await Promise.all([studentsRef.get(), ref.get()]);
 
       const students = studentSnap.docs

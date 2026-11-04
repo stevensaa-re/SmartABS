@@ -29,6 +29,18 @@ service cloud.firestore {
     function isSiswa()      { return active() && me().role == 'siswa'; }
     function isStaff()      { return isAdmin() || isGuru(); }
     function assignedClass() { return me().get('className', ''); }
+    function assignedSchedule(scheduleId) {
+      return isGuru()
+        && exists(/databases/$(database)/documents/schedules/$(scheduleId))
+        && get(/databases/$(database)/documents/schedules/$(scheduleId)).data.teacherUid == request.auth.uid;
+    }
+    function activeTeacher(uid) {
+      return uid is string
+        && uid != ''
+        && exists(/databases/$(database)/documents/users/$(uid))
+        && get(/databases/$(database)/documents/users/$(uid)).data.role == 'guru'
+        && get(/databases/$(database)/documents/users/$(uid)).data.status == 'Aktif';
+    }
     function teaches(className) {
       return isGuru() && assignedClass() != '' && className == assignedClass();
     }
@@ -53,12 +65,12 @@ service cloud.firestore {
         && request.resource.data.keys().hasAll([
           'sessionId', 'sessionToken', 'scheduleId', 'subject', 'studentId',
           'name', 'className', 'date', 'time', 'status', 'note', 'createdAt',
-          'sessionStartedAt', 'source'
+          'sessionStartedAt', 'source', 'teacherUid'
         ])
         && request.resource.data.keys().hasOnly([
           'sessionId', 'sessionToken', 'scheduleId', 'subject', 'studentId',
           'name', 'className', 'date', 'time', 'status', 'note', 'createdAt',
-          'sessionStartedAt', 'source'
+          'sessionStartedAt', 'source', 'teacherUid'
         ])
         && exists(/databases/$(database)/documents/attendanceSessions/$(request.resource.data.sessionId))
         && qrSession(request.resource.data.sessionId).active == true
@@ -67,6 +79,8 @@ service cloud.firestore {
             || (qrSession(request.resource.data.sessionId).get('previousToken', '') != ''
                 && qrSession(request.resource.data.sessionId).previousToken == request.resource.data.sessionToken))
         && qrSession(request.resource.data.sessionId).scheduleId == request.resource.data.scheduleId
+        && qrSession(request.resource.data.sessionId).teacherUid == request.resource.data.teacherUid
+        && request.resource.data.teacherUid == get(/databases/$(database)/documents/schedules/$(request.resource.data.scheduleId)).data.teacherUid
         && qrSession(request.resource.data.sessionId).subject == request.resource.data.subject
         && qrSession(request.resource.data.sessionId).className == request.resource.data.className
         && qrSession(request.resource.data.sessionId).date == request.resource.data.date
@@ -95,19 +109,38 @@ service cloud.firestore {
     function validManualAttendance(id) {
       return isStaff()
         && (isAdmin() || enrolledIn(request.resource.data.studentId, request.resource.data.className))
-        && (isAdmin() || teaches(request.resource.data.className))
         && request.resource.data.status in ['Hadir', 'Terlambat', 'Izin', 'Sakit', 'Alpa']
         && request.resource.data.createdAt == request.time
         && (
-          (id == request.resource.data.date + '_' + request.resource.data.studentId
+          (isAdmin()
+            && id == request.resource.data.date + '_' + request.resource.data.studentId
             && !request.resource.data.keys().hasAny(['sessionId']))
-          || (request.resource.data.sessionId is string
-            && id == request.resource.data.sessionId + '_' + request.resource.data.studentId
-            && exists(/databases/$(database)/documents/attendanceSessions/$(request.resource.data.sessionId))
-            && qrSession(request.resource.data.sessionId).date == request.resource.data.date
-            && qrSession(request.resource.data.sessionId).className == request.resource.data.className
-            && qrSession(request.resource.data.sessionId).scheduleId == request.resource.data.scheduleId
-            && qrSession(request.resource.data.sessionId).subject == request.resource.data.subject)
+          || (request.resource.data.scheduleId is string
+            && exists(/databases/$(database)/documents/schedules/$(request.resource.data.scheduleId))
+            && get(/databases/$(database)/documents/schedules/$(request.resource.data.scheduleId)).data.className
+              == request.resource.data.className
+            && get(/databases/$(database)/documents/schedules/$(request.resource.data.scheduleId)).data.subject
+              == request.resource.data.subject
+            && activeTeacher(request.resource.data.teacherUid)
+            && get(/databases/$(database)/documents/schedules/$(request.resource.data.scheduleId)).data.teacherUid
+              == request.resource.data.teacherUid
+            && (isAdmin() || (assignedSchedule(request.resource.data.scheduleId)
+              && request.resource.data.teacherUid == request.auth.uid))
+            && (
+              id == request.resource.data.scheduleId + '_' + request.resource.data.date + '_' + request.resource.data.studentId
+              || (isGuru()
+                && id == request.resource.data.date + '_' + request.resource.data.studentId
+                && exists(/databases/$(database)/documents/attendance/$(id))
+                && resource.data.teacherUid == request.auth.uid)
+              || (request.resource.data.sessionId is string
+                && id == request.resource.data.sessionId + '_' + request.resource.data.studentId
+                && exists(/databases/$(database)/documents/attendanceSessions/$(request.resource.data.sessionId))
+                && qrSession(request.resource.data.sessionId).date == request.resource.data.date
+                && qrSession(request.resource.data.sessionId).className == request.resource.data.className
+                && qrSession(request.resource.data.sessionId).scheduleId == request.resource.data.scheduleId
+                && qrSession(request.resource.data.sessionId).subject == request.resource.data.subject
+                && qrSession(request.resource.data.sessionId).teacherUid == request.resource.data.teacherUid)
+            ))
         )
         && hasAttendanceHistory(id);
     }
@@ -134,9 +167,11 @@ service cloud.firestore {
     }
 
     match /schedules/{id} {
-      allow read: if isAdmin() || teaches(resource.data.className)
+      allow read: if isAdmin() || (isGuru() && resource.data.teacherUid == request.auth.uid)
         || (isSiswa() && resource.data.className == myClassName());
-      allow write: if isAdmin();
+      allow create: if isAdmin() && activeTeacher(request.resource.data.teacherUid);
+      allow update: if isAdmin() && activeTeacher(request.resource.data.teacherUid);
+      allow delete: if isAdmin();
     }
 
     match /announcements/{id} {
@@ -157,7 +192,9 @@ service cloud.firestore {
     // ---------- absensi ----------
     // Catatan lama memakai "{tanggal}_{nis}"; absensi QR memakai "{sesi}_{nis}".
     match /attendance/{id} {
-      allow read: if isAdmin() || teaches(resource.data.className)
+      allow read: if isAdmin()
+        || (isGuru() && resource.data.teacherUid == request.auth.uid)
+        || (isGuru() && resource.data.source == 'permission' && teaches(resource.data.className))
         || (isSiswa() && myNis() != '' && id.matches('.*_' + myNis() + '$'))
         || (isSiswa() && resource.data.studentId == myNis());
 
@@ -165,7 +202,9 @@ service cloud.firestore {
       allow update: if validManualAttendance(id)
         && resource.data.studentId == request.resource.data.studentId
         && resource.data.date == request.resource.data.date
-        && (isAdmin() || teaches(resource.data.className))
+        && (isAdmin() || (isGuru()
+          && resource.data.teacherUid == request.auth.uid
+          && request.resource.data.teacherUid == request.auth.uid))
         && request.resource.data.studentId == resource.data.studentId
         && request.resource.data.className == resource.data.className;
       allow delete: if false;
@@ -175,7 +214,11 @@ service cloud.firestore {
       match /history/{changeId} {
         allow read: if isAdmin()
           || (exists(/databases/$(database)/documents/attendance/$(id))
-            && (teaches(get(/databases/$(database)/documents/attendance/$(id)).data.className)
+            && ((isGuru()
+                && get(/databases/$(database)/documents/attendance/$(id)).data.teacherUid == request.auth.uid)
+              || (isGuru()
+                && get(/databases/$(database)/documents/attendance/$(id)).data.source == 'permission'
+                && teaches(get(/databases/$(database)/documents/attendance/$(id)).data.className))
               || (isSiswa() && get(/databases/$(database)/documents/attendance/$(id)).data.studentId == myNis())));
         allow create: if isStaff()
           && request.resource.data.actorUid == request.auth.uid
@@ -189,7 +232,12 @@ service cloud.firestore {
           && getAfter(/databases/$(database)/documents/attendance/$(id)).data.date == request.resource.data.date
           && getAfter(/databases/$(database)/documents/attendance/$(id)).data.status == request.resource.data.nextStatus
           && getAfter(/databases/$(database)/documents/attendance/$(id)).data.note == request.resource.data.nextNote
-          && (isAdmin() || teaches(request.resource.data.className))
+          && (isAdmin()
+            || (isGuru()
+              && getAfter(/databases/$(database)/documents/attendance/$(id)).data.teacherUid == request.auth.uid)
+            || (isGuru()
+              && getAfter(/databases/$(database)/documents/attendance/$(id)).data.source == 'permission'
+              && teaches(request.resource.data.className)))
           && (exists(/databases/$(database)/documents/attendance/$(id))
             ? request.resource.data.previousStatus == get(/databases/$(database)/documents/attendance/$(id)).data.status
               && request.resource.data.previousNote == get(/databases/$(database)/documents/attendance/$(id)).data.get('note', '')
@@ -211,7 +259,6 @@ service cloud.firestore {
           'scheduleId', 'subject', 'className', 'date', 'teacherUid', 'teacherName',
           'token', 'previousToken', 'active', 'expiresAt', 'createdAt', 'updatedAt'
         ])
-        && request.resource.data.teacherUid == request.auth.uid
         && request.resource.data.subject is string
         && request.resource.data.subject.size() > 0
         && request.resource.data.previousToken is string
@@ -223,12 +270,15 @@ service cloud.firestore {
           == request.resource.data.className
         && get(/databases/$(database)/documents/schedules/$(request.resource.data.scheduleId)).data.subject
           == request.resource.data.subject
-        && (isAdmin() || (teaches(request.resource.data.className)
+        && get(/databases/$(database)/documents/schedules/$(request.resource.data.scheduleId)).data.teacherUid
+          == request.resource.data.teacherUid
+        && (isAdmin() || (assignedSchedule(request.resource.data.scheduleId)
           && get(/databases/$(database)/documents/schedules/$(request.resource.data.scheduleId)).data.teacher
             == me().name));
       allow update: if isAdmin()
         || (isGuru()
           && resource.data.teacherUid == request.auth.uid
+          && assignedSchedule(resource.data.scheduleId)
           && request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['token', 'previousToken', 'expiresAt', 'updatedAt', 'active', 'closedAt'])
           && request.resource.data.updatedAt == request.time

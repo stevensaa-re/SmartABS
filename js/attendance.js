@@ -206,6 +206,7 @@ function renderTeacherQr() {
     sessionId: teacherQrSession.id,
     token: teacherQrSession.token,
     scheduleId: teacherQrSession.scheduleId,
+    teacherUid: teacherQrSession.teacherUid,
     subject: teacherQrSession.subject,
     className: teacherQrSession.className,
     date: teacherQrSession.date,
