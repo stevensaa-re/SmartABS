@@ -345,6 +345,17 @@ service cloud.firestore {
       allow delete: if isAdmin() && sameSchool(resource.data);
     }
 
+    // Konfigurasi semester hanya dapat diubah melalui Cloud Functions tepercaya.
+    match /semesters/{id} {
+      allow read: if isAdmin() && sameSchool(resource.data);
+      allow create, update, delete: if false;
+    }
+
+    match /semesterConfigurations/{id} {
+      allow read: if isAdmin() && sameSchool(resource.data);
+      allow create, update, delete: if false;
+    }
+
     // Audit bersifat append-only dan hanya dapat dibaca admin.
     match /auditLogs/{id} {
       allow read: if isAdmin() && sameSchool(resource.data);

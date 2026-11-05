@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "seed.js",
   "scripts": {
-    "test": "node --test test/firestore-rules.test.js"
+    "test": "node --test"
   },
   "keywords": [],
   "author": "",

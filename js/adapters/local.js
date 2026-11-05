@@ -49,6 +49,9 @@ const LocalAdapter = (() => {
   }
 
   const byDateDesc = (a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0);
+  const semesterUnavailable = () => {
+    throw new Error('Persiapan semester memerlukan backend Firebase dan Cloud Functions.');
+  };
 
   /* ---------- Seed ---------- */
 
@@ -392,6 +395,16 @@ const LocalAdapter = (() => {
       writeTable('schedules', readTable('schedules').filter((s) => s.id !== id));
       return true;
     },
+
+    getSemesters: semesterUnavailable,
+    getSemesterConfigurations: semesterUnavailable,
+    createSemester: semesterUnavailable,
+    updateSemester: semesterUnavailable,
+    previewSemesterConfigurationCopy: semesterUnavailable,
+    copySemesterConfiguration: semesterUnavailable,
+    updateSemesterConfiguration: semesterUnavailable,
+    deleteSemesterConfiguration: semesterUnavailable,
+    activateSemester: semesterUnavailable,
 
     /* ---------------- ANNOUNCEMENTS ---------------- */
 

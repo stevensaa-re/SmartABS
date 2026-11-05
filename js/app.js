@@ -14,6 +14,7 @@ const MENUS = {
     { key: 'teachers',      label: 'Data Guru',      icon: 'fa-chalkboard-user',    href: 'teachers.html' },
     { key: 'classes',       label: 'Data Kelas',     icon: 'fa-school',             href: 'classes.html' },
     { key: 'schedule',      label: 'Jadwal',         icon: 'fa-calendar-days',      href: 'schedule.html' },
+    { key: 'semesters',     label: 'Persiapan Semester', icon: 'fa-copy',             href: 'semesters.html' },
     { key: 'calendar',      label: 'Kalender Akademik', icon: 'fa-calendar-check',  href: 'calendar.html' },
     { key: 'tools',         label: 'Impor, Backup & Audit', icon: 'fa-shield-halved', href: 'tools.html' },
     { key: 'announcements', label: 'Pengumuman',     icon: 'fa-bullhorn',           href: 'announcements.html' },

@@ -19,6 +19,8 @@ tersedia di bawah tidak boleh dianggap sudah siap dipakai.
 - Kalender akademik untuk kegiatan dan hari libur, tersedia pada website dan Android.
 - Dashboard pemantauan wali kelas untuk tren terlambat dan alpa tujuh hari terakhir.
 - Impor roster siswa/guru melalui CSV dengan pratinjau, validasi kelas, dan deteksi duplikat.
+- Persiapan semester admin: snapshot konfigurasi, preview dan salin mata pelajaran, penugasan,
+  jadwal, jam pelajaran, dan konfigurasi kelas sebelum aktivasi.
 - Backup JSON dan pemulihan merge tanpa menimpa dokumen yang sudah ada; log audit aktivitas
   penting dan histori koreksi absensi.
 - Aplikasi desktop Windows x64 menggunakan UI website; workflow CI menghasilkan installer dan
@@ -50,10 +52,10 @@ Mode `local` memakai `localStorage` browser dan hanya cocok untuk demo. Akun con
    **Cloud Firestore**.
 2. Salin konfigurasi aplikasi web dari Firebase Console ke `js/config.js` dan pilih
    `BACKEND: 'firebase'`.
-3. Dari folder ini, deploy rules dan indexes:
+3. Dari folder ini, deploy Rules, indexes, dan Cloud Functions:
 
    ```bash
-   firebase deploy --only firestore:rules,firestore:indexes
+   firebase deploy --only firestore:rules,firestore:indexes,functions
    ```
 
 4. Pasang Cloud Functions dengan Node.js 22 sesuai
@@ -63,8 +65,22 @@ Mode `local` memakai `localStorage` browser dan hanya cocok untuk demo. Akun con
 6. Untuk project yang sudah berisi data, buat backup dan verifikasi rencana migrasi sebelum
    mengubah dokumen. Tidak ada deployment Firebase yang dijalankan oleh panduan ini.
 
-Website dan Android memakai project Firebase yang sama. Android memerlukan file
+Website, Android, dan Desktop memakai project Firebase yang sama. Android memerlukan file
 `app/google-services.json` milik project tersebut; file itu tidak disertakan dalam repository ini.
+
+### Persiapan semester
+
+Admin membuka menu **Persiapan Semester**, membuat semester berstatus Draft, memilih semester
+sumber dan kategori yang ingin disalin, lalu memeriksa preview. Konflik jadwal kelas/guru harus
+dibereskan sebelum salinan dapat disimpan. Setiap konfigurasi Draft masih dapat diedit atau
+dihapus; aktivasi menerapkan konfigurasi kelas, membuat jadwal baru, mengarsipkan semester aktif
+sebelumnya, dan menulis audit log. Pengulangan salin aman dan relasi yang sudah ada dilewati.
+
+Riwayat absensi, QR, dan sesi kehadiran tidak disalin. Setelah aktivasi, hanya jadwal dari semester
+aktif yang dapat membuka/menerima absensi QR. Semester dan snapshot konfigurasi hanya dapat dibaca
+admin sekolah lewat Rules; perubahan dilakukan melalui Cloud Functions. Struktur data dan callable
+tersedia di [API.md](./API.md), [DATABASE.md](./database/firebase/DATABASE.md), dan
+[FIREBASE_SETUP.md](./FIREBASE_SETUP.md).
 
 ### MySQL legacy (bukan backend produksi)
 

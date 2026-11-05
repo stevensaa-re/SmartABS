@@ -79,6 +79,26 @@ before(async () => {
       type: string('Izin'),
       note: string('Medical appointment'),
       status: string('Menunggu')
+    }, [], false),
+    updateWrite('semesters/semester-a', {
+      name: string('School A Semester'),
+      status: string('Draft'),
+      schoolId: string('school-a')
+    }, [], false),
+    updateWrite('semesters/semester-b', {
+      name: string('School B Semester'),
+      status: string('Draft'),
+      schoolId: string('school-b')
+    }, [], false),
+    updateWrite('semesterConfigurations/config-a', {
+      semesterId: string('semester-a'),
+      type: string('subjects'),
+      schoolId: string('school-a')
+    }, [], false),
+    updateWrite('semesterConfigurations/config-b', {
+      semesterId: string('semester-b'),
+      type: string('subjects'),
+      schoolId: string('school-b')
     }, [], false)
   ]);
   if (!seedResult.ok) throw new Error(`Firestore emulator seeding failed: ${await seedResult.text()}`);
@@ -119,6 +139,33 @@ test('school administrators cannot read or create data across school boundaries'
       `Unexpected tenant access: own=${ownClass.status}, other=${otherClass.status}, ` +
       `scoped query=${scopedQuery.status}, unscoped query=${unscopedQuery.status}, ` +
       `cross-school write=${crossSchoolWrite.status}`
+    );
+  }
+});
+
+test('semester configuration reads are school scoped and clients cannot write directly', async () => {
+  const ownSemester = await firestoreRequest('semesters/semester-a', identities.tenantAdminA.token);
+  const otherSemester = await firestoreRequest('semesters/semester-b', identities.tenantAdminA.token);
+  const ownConfig = await firestoreRequest(
+    'semesterConfigurations/config-a',
+    identities.tenantAdminA.token
+  );
+  const otherConfig = await firestoreRequest(
+    'semesterConfigurations/config-b',
+    identities.tenantAdminA.token
+  );
+  const directWrite = await commit([
+    updateWrite('semesterConfigurations/client-created', {
+      semesterId: string('semester-a'),
+      type: string('subjects'),
+      schoolId: string('school-a')
+    }, [], false)
+  ], identities.tenantAdminA.token);
+  if (ownSemester.status !== 200 || otherSemester.status !== 403 ||
+      ownConfig.status !== 200 || otherConfig.status !== 403 || directWrite.status !== 403) {
+    throw new Error(
+      `Unexpected semester access: own=${ownSemester.status}, other=${otherSemester.status}, ` +
+      `own config=${ownConfig.status}, other config=${otherConfig.status}, write=${directWrite.status}`
     );
   }
 });

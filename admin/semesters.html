@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Persiapan Semester — SMARTABS</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/table.css">
+  <link rel="stylesheet" href="../css/responsive.css">
+  <script src="../js/config.js"></script>
+  <script src="../js/utils.js"></script>
+  <script src="../js/auth.js"></script>
+  <style>
+    #semesterFormCard[hidden] { display: none; }
+    .semester-copy-type { display: inline-flex; gap: .5rem; align-items: center; margin: .35rem 1rem .35rem 0; }
+    .semester-notice { margin-top: 1rem; padding: 1rem; border-radius: .5rem; }
+    .semester-notice-info { background: #eff6ff; color: #1e3a8a; }
+    .semester-notice-success { background: #f0fdf4; color: #166534; }
+    .semester-notice-warning { background: #fffbeb; color: #92400e; }
+    .semester-notice-error { background: #fef2f2; color: #991b1b; }
+    .semester-conflicts { margin-top: .75rem; }
+    .semester-conflicts ul { margin: .5rem 0; padding-left: 1.25rem; }
+    .semester-no-conflicts { color: #166534; }
+  </style>
+</head>
+<body data-role="admin" data-page="semesters">
+<script src="../js/guard.js"></script>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+  <div class="main">
+    <header class="navbar" id="navbar"></header>
+    <main class="content">
+      <div class="page-head">
+        <div>
+          <h1>Persiapan Semester</h1>
+          <p>Buat semester draft, tinjau konfigurasi, lalu aktifkan saat siap digunakan.</p>
+        </div>
+        <button class="btn btn-primary" id="toggleSemesterForm">
+          <i class="fa-solid fa-plus"></i> Semester Baru
+        </button>
+      </div>
+
+      <section class="card" id="semesterFormCard" hidden>
+        <h2 id="semesterFormTitle">Semester Baru</h2>
+        <form id="semesterForm">
+          <input type="hidden" id="semesterId">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="semesterName">Nama semester <span class="req">*</span></label>
+              <input id="semesterName" class="form-control" maxlength="100" required placeholder="Contoh: 2026/2027 Ganjil">
+            </div>
+            <div class="form-group">
+              <label for="academicYear">Tahun ajaran <span class="req">*</span></label>
+              <input id="academicYear" class="form-control" required pattern="\d{4}/\d{4}" placeholder="2026/2027">
+            </div>
+            <div class="form-group">
+              <label for="semesterTerm">Semester <span class="req">*</span></label>
+              <select id="semesterTerm" class="form-control" required>
+                <option value="Ganjil">Ganjil</option>
+                <option value="Genap">Genap</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="semesterStart">Tanggal mulai <span class="req">*</span></label>
+              <input id="semesterStart" type="date" class="form-control" required>
+            </div>
+            <div class="form-group">
+              <label for="semesterEnd">Tanggal selesai <span class="req">*</span></label>
+              <input id="semesterEnd" type="date" class="form-control" required>
+            </div>
+          </div>
+          <div class="form-group" id="importCurrentWrap">
+            <label>
+              <input id="importCurrent" type="checkbox" checked>
+              Ambil konfigurasi jadwal dan kelas saat ini sebagai snapshot awal
+            </label>
+            <small class="text-muted">Tidak menyalin absensi, sesi QR, atau riwayat kehadiran.</small>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline" id="cancelSemesterForm">Batal</button>
+            <button type="submit" class="btn btn-primary" id="saveSemesterButton">Simpan Draft</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="card">
+        <h2>Daftar Semester</h2>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr><th>Semester</th><th>Tahun Ajaran</th><th>Periode</th><th>Status</th><th>Aksi</th></tr>
+            </thead>
+            <tbody id="semesterTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Salin Konfigurasi Semester Sebelumnya</h2>
+        <p class="text-muted">Preview memeriksa relasi yang sudah ada dan konflik sebelum membuat konfigurasi baru.</p>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="sourceSemester">Semester sumber</label>
+            <select id="sourceSemester" class="form-control"></select>
+          </div>
+          <div class="form-group">
+            <label for="targetSemester">Semester tujuan (Draft)</label>
+            <select id="targetSemester" class="form-control"></select>
+          </div>
+        </div>
+        <fieldset class="form-group">
+          <legend>Data yang disalin</legend>
+          <div class="form-row" id="copyTypes"></div>
+        </fieldset>
+        <div class="action-btns">
+          <button class="btn btn-outline" id="previewCopyButton"><i class="fa-solid fa-magnifying-glass"></i> Preview</button>
+          <button class="btn btn-primary" id="copyConfigurationButton" disabled><i class="fa-solid fa-copy"></i> Salin Konfigurasi</button>
+        </div>
+        <div id="copyPreview" class="notice notice-info" aria-live="polite">Pilih semester dan kategori, lalu tampilkan preview.</div>
+      </section>
+
+      <section class="card">
+        <div class="page-head">
+          <div>
+            <h2>Konfigurasi Semester Tujuan</h2>
+            <p class="text-muted">Konfigurasi Draft dapat diedit atau dihapus sebelum diaktifkan.</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Jenis</th><th>Konfigurasi</th><th>Aksi</th></tr></thead>
+            <tbody id="configurationTableBody">
+              <tr><td colspan="3" class="text-muted">Pilih semester tujuan untuk melihat konfigurasi.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<div class="modal" id="configurationModal">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <h3>Edit Konfigurasi</h3>
+      <button class="icon-btn" type="button" id="closeConfigurationModal" aria-label="Tutup">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <form id="configurationForm">
+      <div class="modal-body">
+        <input type="hidden" id="configurationId">
+        <input type="hidden" id="configurationType">
+        <input type="hidden" id="configurationClassId">
+        <div id="configurationFields"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" id="cancelConfigurationModal">Batal</button>
+        <button type="submit" class="btn btn-primary">Simpan Perubahan</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="../js/mock-data.js"></script>
+<script src="../js/adapters/local.js"></script>
+<script src="../js/adapters/mysql.js"></script>
+<script src="../js/adapters/firebase.js"></script>
+<script src="../js/api.js"></script>
+<script src="../js/notifications.js"></script>
+<script src="../js/app.js"></script>
+<script src="../js/semesters.js"></script>
+</body>
+</html>

@@ -156,6 +156,11 @@ const FirebaseAdapter = (() => {
     }
   }
 
+  async function activeSemesterId() {
+    const result = await callFunction('getActiveSemester', {});
+    return result.id || '';
+  }
+
   async function writeAudit(entry) {
     const firebaseUser = auth.currentUser;
     if (!firebaseUser) throw new Error('Sesi Firebase berakhir. Silakan login kembali.');
@@ -643,21 +648,47 @@ const FirebaseAdapter = (() => {
       return true;
     }),
 
+    /* ---------------- SEMESTER ---------------- */
+
+    getSemesters: () => run(async () =>
+      fromSnap(await col('semesters').get()).sort((a, b) =>
+        String(b.startDate || '').localeCompare(String(a.startDate || '')))),
+    getSemesterConfigurations: (semesterId) => run(async () =>
+      fromSnap(await col('semesterConfigurations').where('semesterId', '==', semesterId).get())),
+    createSemester: (payload) => run(() => callFunction('createSemester', payload)),
+    updateSemester: (semesterId, payload) => run(() =>
+      callFunction('updateSemester', { semesterId, ...payload })),
+    previewSemesterConfigurationCopy: (payload) => run(() =>
+      callFunction('previewSemesterConfigurationCopy', payload)),
+    copySemesterConfiguration: (payload) => run(() =>
+      callFunction('copySemesterConfiguration', payload)),
+    updateSemesterConfiguration: (configurationId, payload) => run(() =>
+      callFunction('updateSemesterConfiguration', { configurationId, payload })),
+    deleteSemesterConfiguration: (configurationId) => run(() =>
+      callFunction('deleteSemesterConfiguration', { configurationId })),
+    activateSemester: (semesterId) => run(() =>
+      callFunction('activateSemester', { semesterId })),
+
     /* ---------------- SCHEDULES ---------------- */
 
     getSchedules: () => run(async () => {
       const className = await assignedClassName();
       const session = Session.get();
+      const activeId = await activeSemesterId();
       const ref = session?.role === 'guru'
         ? col('schedules').where('teacherUid', '==', auth.currentUser.uid)
         : session?.role === 'siswa'
           ? col('schedules').where('className', '==', className || '__unassigned__')
           : col('schedules');
-      return fromSnap(await ref.get());
+      const schedules = fromSnap(await ref.get());
+      return schedules.filter((schedule) =>
+        activeId ? schedule.semesterId === activeId : !schedule.semesterId);
     }),
 
     createSchedule: (payload) => run(async () => {
       const data = { ...payload, teacherUid: await resolveTeacherUid(payload.teacher) };
+      const semesterId = await activeSemesterId();
+      if (semesterId) data.semesterId = semesterId;
       const ref = await col('schedules').add(data);
       await writeAudit({ action: 'create', entity: 'schedule', entityId: ref.id,
         summary: `Menambahkan jadwal ${data.subject} untuk kelas ${data.className}.` });

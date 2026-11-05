@@ -61,6 +61,9 @@ const MysqlAdapter = (() => {
   const post = (path, body)  => request('POST', path, body);
   const put  = (path, body)  => request('PUT', path, body);
   const del  = (path)        => request('DELETE', path);
+  const semesterUnavailable = () => {
+    throw new Error('Persiapan semester memerlukan backend Firebase dan Cloud Functions.');
+  };
 
   return {
 
@@ -126,6 +129,16 @@ const MysqlAdapter = (() => {
     createSchedule: (payload)     => post('/schedules', payload),
     updateSchedule: (id, payload) => put(`/schedules/${enc(id)}`, payload),
     deleteSchedule: (id)          => del(`/schedules/${enc(id)}`).then(() => true),
+
+    getSemesters: semesterUnavailable,
+    getSemesterConfigurations: semesterUnavailable,
+    createSemester: semesterUnavailable,
+    updateSemester: semesterUnavailable,
+    previewSemesterConfigurationCopy: semesterUnavailable,
+    copySemesterConfiguration: semesterUnavailable,
+    updateSemesterConfiguration: semesterUnavailable,
+    deleteSemesterConfiguration: semesterUnavailable,
+    activateSemester: semesterUnavailable,
 
     /* ---------------- ANNOUNCEMENTS ---------------- */
 

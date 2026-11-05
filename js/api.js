@@ -25,6 +25,10 @@ const API_CONTRACT = [
   'getClasses', 'createClass', 'updateClass', 'deleteClass',
   /* schedules */
   'getSchedules', 'createSchedule', 'updateSchedule', 'deleteSchedule',
+  /* semester preparation */
+  'getSemesters', 'getSemesterConfigurations', 'createSemester', 'updateSemester',
+  'previewSemesterConfigurationCopy', 'copySemesterConfiguration',
+  'updateSemesterConfiguration', 'deleteSemesterConfiguration', 'activateSemester',
   /* announcements */
   'getAnnouncements', 'createAnnouncement', 'updateAnnouncement', 'deleteAnnouncement',
   /* attendance */
