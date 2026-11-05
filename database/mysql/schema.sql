@@ -10,26 +10,12 @@ CREATE DATABASE IF NOT EXISTS smartabs
 
 USE smartabs;
 
--- Urutan DROP mengikuti ketergantungan foreign key (anak dulu)
-SET FOREIGN_KEY_CHECKS = 0;
-DROP TABLE IF EXISTS permissions;
-DROP TABLE IF EXISTS audit_logs;
-DROP TABLE IF EXISTS calendar_events;
-DROP TABLE IF EXISTS attendance;
-DROP TABLE IF EXISTS schedules;
-DROP TABLE IF EXISTS announcements;
-DROP TABLE IF EXISTS teachers;
-DROP TABLE IF EXISTS students;
-DROP TABLE IF EXISTS classes;
-DROP TABLE IF EXISTS users;
-SET FOREIGN_KEY_CHECKS = 1;
-
 -- ---------------------------------------------------------
 -- users : akun login (admin / guru / siswa)
 -- Password disimpan sebagai hash bcrypt, TIDAK PERNAH teks polos.
 -- Collation *_ci membuat username unik tanpa peduli huruf besar/kecil.
 -- ---------------------------------------------------------
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   id            VARCHAR(20)  NOT NULL,
   name          VARCHAR(100) NOT NULL,
   username      VARCHAR(50)  NOT NULL,
@@ -46,7 +32,7 @@ CREATE TABLE users (
 -- ---------------------------------------------------------
 -- classes : data kelas
 -- ---------------------------------------------------------
-CREATE TABLE classes (
+CREATE TABLE IF NOT EXISTS classes (
   id        VARCHAR(20)  NOT NULL,
   name      VARCHAR(50)  NOT NULL,
   level     VARCHAR(10)  NOT NULL,
@@ -61,7 +47,7 @@ CREATE TABLE classes (
 -- students : data induk siswa (kunci = NIS)
 -- user_id menghubungkan siswa dengan akun login (opsional)
 -- ---------------------------------------------------------
-CREATE TABLE students (
+CREATE TABLE IF NOT EXISTS students (
   nis      VARCHAR(20)  NOT NULL,
   name     VARCHAR(100) NOT NULL,
   class_id VARCHAR(20)  NOT NULL,
@@ -81,7 +67,7 @@ CREATE TABLE students (
 -- ---------------------------------------------------------
 -- teachers : profil guru (satu akun guru = satu profil)
 -- ---------------------------------------------------------
-CREATE TABLE teachers (
+CREATE TABLE IF NOT EXISTS teachers (
   id       VARCHAR(20)  NOT NULL,
   user_id  VARCHAR(20)  NOT NULL,
   name     VARCHAR(100) NOT NULL,
@@ -100,7 +86,7 @@ CREATE TABLE teachers (
 -- ---------------------------------------------------------
 -- schedules : jadwal pelajaran
 -- ---------------------------------------------------------
-CREATE TABLE schedules (
+CREATE TABLE IF NOT EXISTS schedules (
   id           VARCHAR(20)  NOT NULL,
   day          ENUM('Senin','Selasa','Rabu','Kamis','Jumat','Sabtu') NOT NULL,
   start_time   TIME         NOT NULL,
@@ -117,7 +103,7 @@ CREATE TABLE schedules (
 -- ---------------------------------------------------------
 -- announcements : pengumuman
 -- ---------------------------------------------------------
-CREATE TABLE announcements (
+CREATE TABLE IF NOT EXISTS announcements (
   id      VARCHAR(20)  NOT NULL,
   title   VARCHAR(200) NOT NULL,
   content TEXT         NOT NULL,
@@ -132,7 +118,7 @@ CREATE TABLE announcements (
 -- class_id adalah "snapshot" kelas saat absensi dicatat, sehingga
 -- riwayat tetap benar walaupun siswa kemudian pindah kelas.
 -- ---------------------------------------------------------
-CREATE TABLE attendance (
+CREATE TABLE IF NOT EXISTS attendance (
   id          VARCHAR(40)  NOT NULL,
   student_nis VARCHAR(20)  NOT NULL,
   class_id    VARCHAR(20)  NULL,
@@ -156,7 +142,7 @@ CREATE TABLE attendance (
 -- ---------------------------------------------------------
 -- permissions : pengajuan izin / sakit / alpa dari siswa
 -- ---------------------------------------------------------
-CREATE TABLE permissions (
+CREATE TABLE IF NOT EXISTS permissions (
   id          VARCHAR(20)  NOT NULL,
   student_nis VARCHAR(20)  NOT NULL,
   class_id    VARCHAR(20)  NULL,
@@ -181,7 +167,7 @@ CREATE TABLE permissions (
 -- ---------------------------------------------------------
 -- calendar_events : agenda akademik dan hari libur
 -- ---------------------------------------------------------
-CREATE TABLE calendar_events (
+CREATE TABLE IF NOT EXISTS calendar_events (
   id          VARCHAR(40)  NOT NULL,
   title       VARCHAR(120) NOT NULL,
   type        VARCHAR(30)  NOT NULL DEFAULT 'Akademik',
@@ -198,7 +184,7 @@ CREATE TABLE calendar_events (
 -- ---------------------------------------------------------
 -- audit_logs : catatan append-only untuk aktivitas penting
 -- ---------------------------------------------------------
-CREATE TABLE audit_logs (
+CREATE TABLE IF NOT EXISTS audit_logs (
   id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   actor_id    VARCHAR(20)  NOT NULL,
   actor_name  VARCHAR(100) NOT NULL,

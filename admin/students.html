@@ -128,11 +128,37 @@
         </div>
 
         <div class="form-group">
-          <label for="studentUser">Akun Login (opsional)</label>
+          <label class="checkbox-label" for="studentCreateAccount">
+            <input type="checkbox" id="studentCreateAccount">
+            Buat akun login siswa baru
+          </label>
+          <small class="text-muted">Akun dibuat dan langsung ditautkan saat profil siswa disimpan.</small>
+        </div>
+
+        <div id="studentNewAccountFields">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="studentNewUsername">Username <span class="req">*</span></label>
+              <input type="text" id="studentNewUsername" class="form-control" autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label for="studentNewEmail">Email login <span class="req">*</span></label>
+              <input type="email" id="studentNewEmail" class="form-control" autocomplete="off">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="studentNewPassword">Password awal <span class="req">*</span></label>
+            <input type="password" id="studentNewPassword" class="form-control" autocomplete="new-password" minlength="6">
+            <small class="text-muted">Berikan password awal ini kepada siswa/wali secara aman.</small>
+          </div>
+        </div>
+
+        <div class="form-group" id="studentExistingAccountField">
+          <label for="studentUser">Hubungkan ke akun siswa yang sudah ada</label>
           <select id="studentUser" class="form-control">
             <option value="">— Belum dihubungkan —</option>
           </select>
-          <small class="text-muted">Hubungkan agar siswa dapat login dan melihat data kehadirannya sendiri.</small>
+          <small class="text-muted">Gunakan bila akun login siswa telah dibuat sebelumnya.</small>
         </div>
       </div>
       <div class="modal-footer">

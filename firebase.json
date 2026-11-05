@@ -1,4 +1,8 @@
 {
+  "functions": {
+    "source": "functions",
+    "runtime": "nodejs22"
+  },
   "firestore": {
     "rules": "database/firebase/firestore.rules",
     "indexes": "database/firebase/firestore.indexes.json"
@@ -6,6 +10,9 @@
   "emulators": {
     "auth": {
       "port": 9099
+    },
+    "functions": {
+      "port": 5001
     },
     "firestore": {
       "port": 8080

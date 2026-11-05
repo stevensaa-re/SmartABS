@@ -24,8 +24,13 @@ const FirebaseAdapter = (() => {
 
   let db = null;
   let auth = null;
+  let functionsApi = null;
   let initPromise = null;
-  const sessionClockOffsets = new Map();
+  let activeSchoolId = null;
+
+  function currentSchoolId() {
+    return String(activeSchoolId !== null ? activeSchoolId : Session.get()?.schoolId || '');
+  }
 
   /* ---------- Pemuatan SDK ---------- */
 
@@ -55,12 +60,15 @@ const FirebaseAdapter = (() => {
       await loadScript(`${SDK_BASE}firebase-app-compat.js`);
       await Promise.all([
         loadScript(`${SDK_BASE}firebase-auth-compat.js`),
-        loadScript(`${SDK_BASE}firebase-firestore-compat.js`)
+        loadScript(`${SDK_BASE}firebase-firestore-compat.js`),
+        loadScript(`${SDK_BASE}firebase-functions-compat.js`)
       ]);
 
       if (!firebase.apps.length) firebase.initializeApp(APP_CONFIG.FIREBASE);
       auth = firebase.auth();
       db = firebase.firestore();
+      functionsApi = firebase.app().functions(APP_CONFIG.FIREBASE_FUNCTIONS_REGION);
+      activeSchoolId = String(Session.get()?.schoolId || '');
 
       /* Tunggu Firebase memulihkan sesi login sebelum query pertama,
          jika tidak, query akan dikirim tanpa autentikasi dan ditolak. */
@@ -102,8 +110,51 @@ const FirebaseAdapter = (() => {
   };
   const fromSnap = (snap) => snap.docs.map(fromDoc);
   const byDateDesc = (a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0);
-  const col = (name) => db.collection(name);
-  const createQrToken = () => crypto.randomUUID().replace(/-/g, '');
+  const col = (name) => {
+    const collection = db.collection(name).withConverter({
+      toFirestore: (data) => {
+        const schoolId = currentSchoolId();
+        return schoolId ? { ...data, schoolId } : data;
+      },
+      fromFirestore: (snapshot, options) => snapshot.data(options)
+    });
+    const queryForSchool = () => {
+      const schoolId = currentSchoolId();
+      return schoolId ? collection.where('schoolId', '==', schoolId) : collection;
+    };
+    return new Proxy(collection, {
+      get(target, property) {
+        if (property === 'get' || property === 'where' || property === 'orderBy' ||
+            property === 'limit' || property === 'onSnapshot') {
+          return (...args) => queryForSchool()[property](...args);
+        }
+        const value = target[property];
+        return typeof value === 'function' ? value.bind(target) : value;
+      }
+    });
+  };
+
+  async function callFunction(name, data) {
+    try {
+      const result = await functionsApi.httpsCallable(name)(data);
+      return result.data;
+    } catch (error) {
+      const message = String(error && error.message || '');
+      if (error && error.code === 'functions/unauthenticated') {
+        throw new Error('Sesi login berakhir. Silakan login kembali.');
+      }
+      if (error && error.code === 'functions/permission-denied') {
+        throw new Error('Anda tidak memiliki izin untuk melakukan aksi ini.');
+      }
+      if (error && error.code === 'functions/already-exists') {
+        throw new Error(message.replace(/^Firebase:\s*/i, '') || 'Data sudah terdaftar.');
+      }
+      if (error && error.code === 'functions/failed-precondition') {
+        throw new Error(message.replace(/^Firebase:\s*/i, '') || 'Prasyarat data belum terpenuhi.');
+      }
+      throw new Error(message || `Cloud Function ${name} gagal dijalankan.`);
+    }
+  }
 
   async function writeAudit(entry) {
     const firebaseUser = auth.currentUser;
@@ -198,14 +249,6 @@ const FirebaseAdapter = (() => {
     `${String(username).trim().toLowerCase()}@${APP_CONFIG.FIREBASE_LOGIN_DOMAIN}`;
   const validEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || '').trim());
 
-  /* Instance Firebase kedua, khusus untuk membuat akun baru tanpa
-     mengeluarkan admin yang sedang login. */
-  function secondaryAuth() {
-    let app = firebase.apps.find((item) => item.name === 'smartabs-secondary');
-    if (!app) app = firebase.initializeApp(APP_CONFIG.FIREBASE, 'smartabs-secondary');
-    return app.auth();
-  }
-
   const AUTH_FAIL_CODES = [
     'auth/wrong-password', 'auth/user-not-found', 'auth/invalid-credential',
     'auth/invalid-login-credentials', 'auth/invalid-email'
@@ -223,6 +266,7 @@ const FirebaseAdapter = (() => {
 
     async login(username, password) {
       await init();
+      activeSchoolId = '';
 
       const loginInput = String(username).trim();
       const credentialEmail = loginInput.includes('@') ? loginInput : loginEmail(loginInput);
@@ -253,14 +297,23 @@ const FirebaseAdapter = (() => {
         await auth.signOut();
         return { ok: false, message: 'Akun Anda tidak aktif. Hubungi administrator.' };
       }
+      activeSchoolId = String(profile.schoolId || '');
       return {
         ok: true,
-        user: { id: snap.id, name: profile.name, username: profile.username, email: credential.user.email, role: profile.role }
+        user: {
+          id: snap.id,
+          name: profile.name,
+          username: profile.username,
+          email: credential.user.email,
+          role: profile.role,
+          schoolId: activeSchoolId
+        }
       };
     },
 
     async logout() {
       try { await init(); await auth.signOut(); } catch (error) { /* abaikan */ }
+      activeSchoolId = '';
       return true;
     },
 
@@ -268,47 +321,9 @@ const FirebaseAdapter = (() => {
 
     getUsers: () => run(async () => fromSnap(await col('users').get())),
 
-    createUser: (payload) => run(async () => {
-      const username = String(payload.username).trim();
-      const usernameLower = username.toLowerCase();
-      const email = String(payload.email || '').trim().toLowerCase();
-
-      if (!validEmail(email)) throw new Error('Email login wajib diisi dengan format email yang valid.');
-
-      const exists = await col('users').where('usernameLower', '==', usernameLower).limit(1).get();
-      if (!exists.empty) throw new Error('Username sudah digunakan.');
-
-      const sAuth = secondaryAuth();
-      let credential;
-      try {
-        credential = await sAuth.createUserWithEmailAndPassword(email, payload.password);
-      } catch (error) {
-        if (error.code === 'auth/email-already-in-use') throw new Error('Username sudah digunakan.');
-        if (error.code === 'auth/weak-password') throw new Error('Password terlalu lemah (minimal 6 karakter).');
-        throw error;
-      }
-
-      const profile = {
-        name: payload.name,
-        username,
-        usernameLower,
-        role: payload.role,
-        status: payload.status || 'Aktif',
-        email
-      };
-
-      try {
-        await col('users').doc(credential.user.uid).set(profile);
-      } catch (error) {
-        await credential.user.delete().catch(() => {});
-        throw error;
-      } finally {
-        await sAuth.signOut();
-      }
-      await writeAudit({ action: 'create', entity: 'user', entityId: credential.user.uid,
-        summary: `Membuat akun ${profile.username} dengan role ${profile.role}.` });
-      return { id: credential.user.uid, ...profile };
-    }),
+    createUser: (payload) => run(() => callFunction('createUser', payload)),
+    createTeacherAccount: (payload) => run(() => callFunction('createTeacherAccount', payload)),
+    createStudentAccount: (payload) => run(() => callFunction('createStudentAccount', payload)),
 
     updateUser: (id, payload) => run(async () => {
       const ref = col('users').doc(id);
@@ -909,197 +924,25 @@ const FirebaseAdapter = (() => {
       };
     }),
 
-    startAttendanceSession: (payload) => run(async () => {
-      const firebaseUser = auth.currentUser;
-      if (!firebaseUser) throw new Error('Sesi Firebase berakhir. Silakan login kembali.');
-      const profileSnap = await col('users').doc(firebaseUser.uid).get();
-      if (!profileSnap.exists || profileSnap.data().status !== 'Aktif') {
-        throw new Error('Profil akun tidak aktif atau tidak ditemukan.');
-      }
-      const profile = profileSnap.data();
-      if (!['admin', 'guru'].includes(profile.role)) throw new Error('Hanya guru atau admin yang dapat membuka sesi absensi.');
+    startAttendanceSession: (payload) => run(() => callFunction('startAttendanceSession', {
+      scheduleId: String(payload.scheduleId || ''),
+      date: String(payload.date || todayISO())
+    })),
 
-      const schedule = await col('schedules').doc(String(payload.scheduleId || '')).get();
-      if (!schedule.exists) throw new Error('Jadwal mata pelajaran tidak ditemukan.');
-      const scheduleData = schedule.data();
-      if (scheduleData.className !== payload.className || scheduleData.subject !== payload.subject) {
-        throw new Error('Jadwal dan kelas tidak cocok.');
-      }
-      if (profile.role === 'guru' && scheduleData.teacherUid !== firebaseUser.uid) {
-        throw new Error('Jadwal ini tidak ditugaskan kepada akun Anda.');
-      }
-      if (!String(scheduleData.teacherUid || '')) {
-        throw new Error('Jadwal belum memiliki akun guru yang ditautkan.');
-      }
-
-      const date = String(payload.date || todayISO());
-      let activeSessions = col('attendanceSessions')
-        .where('scheduleId', '==', schedule.id)
-        .where('date', '==', date)
-        .where('active', '==', true)
-        .where('className', '==', scheduleData.className);
-      if (profile.role === 'guru') {
-        activeSessions = activeSessions
-          .where('teacherUid', '==', firebaseUser.uid);
-      }
-      const activeSnapshot = await activeSessions.get();
-      if (activeSnapshot.docs.some((doc) => {
-        const expiresAt = doc.data().expiresAt;
-        return expiresAt && expiresAt.toMillis() > Date.now();
-      })) {
-        throw new Error('Sesi QR untuk jadwal ini masih aktif. Tutup sesi yang sedang berjalan terlebih dahulu.');
-      }
-
-      const ref = col('attendanceSessions').doc();
-      const token = createQrToken();
-      const now = Date.now();
-      await ref.set({
-        scheduleId: schedule.id,
-        subject: scheduleData.subject,
-        className: scheduleData.className,
-        date,
-        teacherUid: scheduleData.teacherUid,
-        teacherName: scheduleData.teacher || profile.name || '',
-        token,
-        previousToken: '',
-        active: false,
-        expiresAt: firebase.firestore.Timestamp.fromMillis(now),
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
-      const updated = await ref.get();
-      const serverTime = updated.get('createdAt');
-      if (!serverTime) throw new Error('Waktu server Firebase belum tersedia. Coba buka sesi lagi.');
-      const serverOffset = serverTime.toMillis() - Date.now();
-      sessionClockOffsets.set(ref.id, serverOffset);
-      const expiresAt = Date.now() + serverOffset + 30_000;
-      await ref.update({
-        active: true,
-        expiresAt: firebase.firestore.Timestamp.fromMillis(expiresAt),
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
-      return {
-        id: ref.id,
-        scheduleId: schedule.id,
-        teacherUid: scheduleData.teacherUid,
-        subject: scheduleData.subject,
-        className: scheduleData.className,
-        date,
-        token,
-        expiresAt,
-        sessionStartedAtSeconds: serverTime.seconds,
-        sessionStartedAtNanos: serverTime.nanoseconds
-      };
-    }),
-
-    rotateAttendanceSession: (sessionId) => run(async () => {
-      const ref = col('attendanceSessions').doc(String(sessionId));
-      const snap = await ref.get();
-      if (!snap.exists || !snap.data().active) throw new Error('Sesi absensi sudah ditutup.');
-      const session = snap.data();
-      let serverOffset = sessionClockOffsets.get(ref.id);
-      if (serverOffset === undefined || Math.abs(serverOffset) > 24 * 60 * 60 * 1000) {
-        serverOffset = 0;
-        sessionClockOffsets.set(ref.id, serverOffset);
-      }
-      const previousToken = String(session.token || '');
-      const token = createQrToken();
-      const expiresAt = Date.now() + serverOffset + 30_000;
-      await ref.update({
-        token,
-        previousToken,
-        expiresAt: firebase.firestore.Timestamp.fromMillis(expiresAt),
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
-      return {
-        ...session,
-        id: ref.id,
-        token,
-        expiresAt,
-        sessionStartedAtSeconds: session.createdAt.seconds,
-        sessionStartedAtNanos: session.createdAt.nanoseconds
-      };
-    }),
+    rotateAttendanceSession: (sessionId) => run(() =>
+      callFunction('rotateAttendanceSession', { sessionId: String(sessionId) })),
 
     closeAttendanceSession: (sessionId) => run(async () => {
-      const firebaseUser = auth.currentUser;
-      if (!firebaseUser) throw new Error('Sesi Firebase berakhir. Silakan login kembali.');
-      const ref = col('attendanceSessions').doc(String(sessionId));
-      const snap = await ref.get();
-      if (!snap.exists) throw new Error('Sesi absensi tidak ditemukan.');
-      if (snap.data().teacherUid !== firebaseUser.uid) {
-        const profile = await col('users').doc(firebaseUser.uid).get();
-        if (!profile.exists || profile.data().role !== 'admin') {
-          throw new Error('Anda tidak berhak menutup sesi absensi ini.');
-        }
-      }
-      await ref.update({
-        active: false,
-        closedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
-      sessionClockOffsets.delete(ref.id);
+      await callFunction('closeAttendanceSession', { sessionId: String(sessionId) });
       return true;
     }),
 
     submitQrAttendance: (payload) => run(async () => {
-      const firebaseUser = auth.currentUser;
-      if (!firebaseUser) throw new Error('Sesi Firebase berakhir. Silakan login kembali.');
-      const profileSnap = await col('users').doc(firebaseUser.uid).get();
-      if (!profileSnap.exists || profileSnap.data().status !== 'Aktif' || profileSnap.data().role !== 'siswa') {
-        throw new Error('Hanya akun siswa aktif yang dapat melakukan absensi QR.');
-      }
-      const nis = String(profileSnap.data().nis || '');
-      if (!nis) throw new Error('Akun belum ditautkan ke data siswa.');
-      const student = await getStudentDoc(nis);
-      if (student.status !== 'Aktif') throw new Error('Data siswa tidak aktif.');
-      const sessionId = String(payload.sessionId || '');
-      const token = String(payload.token || '');
-      const scheduleId = String(payload.scheduleId || '');
-      const teacherUid = String(payload.teacherUid || '');
-      const date = String(payload.date || '');
-      if (!/^[A-Za-z0-9_-]{20,}$/.test(sessionId) || !/^[a-f0-9]{32}$/.test(token) ||
-          !/^[A-Za-z0-9_-]{1,128}$/.test(teacherUid) || !scheduleId ||
-          !/^\d{4}-\d{2}-\d{2}$/.test(date) || !String(payload.subject || '')) {
-        throw new Error('QR absensi tidak valid.');
-      }
-      const sessionStartedAtSeconds = Number(payload.sessionStartedAt && payload.sessionStartedAt.seconds);
-      const sessionStartedAtNanos = Number(payload.sessionStartedAt && payload.sessionStartedAt.nanoseconds);
-      if (!Number.isInteger(sessionStartedAtSeconds) || !Number.isInteger(sessionStartedAtNanos) ||
-          sessionStartedAtNanos < 0 || sessionStartedAtNanos >= 1_000_000_000) {
-        throw new Error('Waktu mulai sesi QR tidak valid.');
-      }
-      const record = {
-        sessionId,
-        sessionToken: token,
-        scheduleId,
-        teacherUid,
-        subject: String(payload.subject || ''),
-        studentId: student.nis,
-        name: student.name,
-        className: student.className,
-        date,
-        sessionStartedAt: new firebase.firestore.Timestamp(sessionStartedAtSeconds, sessionStartedAtNanos),
-        time: firebase.firestore.FieldValue.serverTimestamp(),
-        status: 'Hadir',
-        source: 'qr',
-        note: `Absensi QR · ${String(payload.subject || '')}`,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      };
-      const ref = col('attendance').doc(`${sessionId}_${student.nis}`);
-      try {
-        await db.runTransaction(async (transaction) => {
-          const current = await transaction.get(ref);
-          if (current.exists) throw new Error('Absensi mata pelajaran ini sudah tercatat.');
-          transaction.set(ref, record);
-        });
-      } catch (error) {
-        if (error && error.code === 'permission-denied') {
-          throw new Error('QR kedaluwarsa, sesi ditutup, atau akun tidak sesuai kelas.');
-        }
-        throw error;
-      }
-      return fromDoc(await ref.get());
+      const result = await callFunction('submitQrAttendance', {
+        sessionId: String(payload.sessionId || ''),
+        token: String(payload.token || '')
+      });
+      return result;
     }),
 
     deleteAttendance: (id) => run(async () => {

@@ -11,16 +11,26 @@ const identities = {};
 let sessionStart;
 
 before(async () => {
-  for (const [key, role, nis] of [
+  for (const [key, role, nis, schoolId] of [
     ['admin', 'admin'],
     ['teacherA', 'guru'],
     ['teacherB', 'guru'],
-    ['studentA', 'siswa', 'NIS-1']
+    ['studentA', 'siswa', 'NIS-1'],
+    ['tenantAdminA', 'admin', '', 'school-a'],
+    ['tenantAdminB', 'admin', '', 'school-b']
   ]) {
-    identities[key] = await createIdentity(role, nis);
+    identities[key] = await createIdentity(role, nis, schoolId);
   }
 
   const seedResult = await commit([
+    updateWrite('schools/school-a', {
+      status: string('Aktif'),
+      timeZone: string('Asia/Jakarta')
+    }, [], false),
+    updateWrite('schools/school-b', {
+      status: string('Aktif'),
+      timeZone: string('Asia/Jakarta')
+    }, [], false),
     ...Object.values(identities).map((identity) => updateWrite(
       `users/${identity.uid}`,
       {
@@ -29,7 +39,8 @@ before(async () => {
         name: string(identity.role),
         username: string(identity.uid),
         ...(identity.role === 'guru' ? { className: string('Class One') } : {}),
-        ...(identity.nis ? { nis: string(identity.nis) } : {})
+        ...(identity.nis ? { nis: string(identity.nis) } : {}),
+        ...(identity.schoolId ? { schoolId: string(identity.schoolId) } : {})
       },
       [],
       false
@@ -39,6 +50,14 @@ before(async () => {
       name: string('Student One'),
       className: string('Class One'),
       status: string('Aktif')
+    }, [], false),
+    updateWrite('classes/tenant-class-a', {
+      name: string('Tenant Class A'),
+      schoolId: string('school-a')
+    }, [], false),
+    updateWrite('classes/tenant-class-b', {
+      name: string('Tenant Class B'),
+      schoolId: string('school-b')
     }, [], false),
     updateWrite('schedules/schedule-a', {
       teacherUid: string(identities.teacherA.uid),
@@ -63,6 +82,45 @@ before(async () => {
     }, [], false)
   ]);
   if (!seedResult.ok) throw new Error(`Firestore emulator seeding failed: ${await seedResult.text()}`);
+});
+
+test('school administrators cannot read or create data across school boundaries', async () => {
+  const ownClass = await firestoreRequest(
+    'classes/tenant-class-a',
+    identities.tenantAdminA.token
+  );
+  const otherClass = await firestoreRequest(
+    'classes/tenant-class-b',
+    identities.tenantAdminA.token
+  );
+  const scopedQuery = await runQuery({
+    from: [{ collectionId: 'classes' }],
+    where: {
+      fieldFilter: {
+        field: { fieldPath: 'schoolId' },
+        op: 'EQUAL',
+        value: string('school-a')
+      }
+    }
+  }, identities.tenantAdminA.token);
+  const unscopedQuery = await runQuery({
+    from: [{ collectionId: 'classes' }]
+  }, identities.tenantAdminA.token);
+  const crossSchoolWrite = await commit([
+    updateWrite('classes/cross-school-class', {
+      name: string('Cross School Class'),
+      schoolId: string('school-b')
+    }, [], false)
+  ], identities.tenantAdminA.token);
+  if (ownClass.status !== 200 || otherClass.status !== 403 ||
+      scopedQuery.status !== 200 || unscopedQuery.status !== 403 ||
+      crossSchoolWrite.status !== 403) {
+    throw new Error(
+      `Unexpected tenant access: own=${ownClass.status}, other=${otherClass.status}, ` +
+      `scoped query=${scopedQuery.status}, unscoped query=${unscopedQuery.status}, ` +
+      `cross-school write=${crossSchoolWrite.status}`
+    );
+  }
 });
 
 test('a teacher cannot read another teacher schedule', async () => {
@@ -101,7 +159,7 @@ test('a teacher cannot record attendance against a colleague schedule', async ()
   }
 });
 
-test('a student can submit a valid QR attendance record only to their own record', async () => {
+test('a student cannot write QR attendance directly to Firestore', async () => {
   sessionStart = new Date();
   await commit([updateWrite('attendanceSessions/session-a', {
     active: bool(true),
@@ -137,21 +195,34 @@ test('a student can submit a valid QR attendance record only to their own record
   ];
   const result = await commit(writes, identities.studentA.token);
   const writeBody = await result.text();
-  const ownRecord = await firestoreRequest(
-    'attendance/session-a_NIS-1',
-    identities.studentA.token
-  );
-  const otherRecord = await firestoreRequest(
-    'attendance/session-a_OTHER',
-    identities.studentA.token
-  );
-  const ownBody = await ownRecord.text();
-  const otherBody = await otherRecord.text();
-  if (result.status !== 200 || ownRecord.status !== 200 || otherRecord.status !== 403) {
+  const ownRecord = await firestoreRequest('attendance/session-a_NIS-1', identities.studentA.token);
+  if (result.status !== 403 || ownRecord.status !== 404) {
     throw new Error(
-      `Unexpected QR access result: write=${result.status} (${writeBody}), own=${ownRecord.status} (${ownBody}), ` +
-      `other=${otherRecord.status} (${otherBody})`
+      `Direct QR writes must be denied: write=${result.status} (${writeBody}), ` +
+      `record=${ownRecord.status} (${await ownRecord.text()})`
     );
+  }
+});
+
+test('a teacher cannot create or mutate an attendance session directly', async () => {
+  const create = await commit([
+    updateWrite('attendanceSessions/client-session', {
+      scheduleId: string('schedule-a'),
+      subject: string('Mathematics'),
+      className: string('Class One'),
+      date: string('2026-11-04'),
+      teacherUid: string(identities.teacherA.uid),
+      teacherName: string('Teacher A'),
+      token: string('0123456789abcdef0123456789abcdef'),
+      previousToken: string(''),
+      active: bool(false),
+      expiresAt: timestamp(new Date()),
+      createdAt: timestamp(new Date()),
+      updatedAt: timestamp(new Date())
+    }, ['createdAt', 'updatedAt'], false)
+  ], identities.teacherA.token);
+  if (create.status !== 403) {
+    throw new Error(`Teacher-created QR session should be denied (${create.status}): ${await create.text()}`);
   }
 });
 
@@ -203,7 +274,7 @@ test('a class teacher can approve a pending permission with matching attendance 
   }
 });
 
-async function createIdentity(role, nis) {
+async function createIdentity(role, nis, schoolId = '') {
   const response = await fetch(
     `http://${authHost}/identitytoolkit.googleapis.com/v1/accounts:signUp?key=fake-api-key`,
     {
@@ -218,7 +289,7 @@ async function createIdentity(role, nis) {
   );
   const body = await response.json();
   if (!response.ok) throw new Error(`Auth emulator sign-up failed (${response.status}).`);
-  return { uid: body.localId, token: body.idToken, role, nis };
+  return { uid: body.localId, token: body.idToken, role, nis, schoolId };
 }
 
 async function writeManualAttendance({ scheduleId, teacherUid, subject }) {
@@ -283,6 +354,14 @@ async function commit(writes, token = 'owner') {
 
 async function firestoreRequest(path, token) {
   return fetch(`${firestoreBase}/${path}`, { headers: authHeaders(token) });
+}
+
+async function runQuery(structuredQuery, token) {
+  return fetch(`${firestoreBase}:runQuery`, {
+    method: 'POST',
+    headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ structuredQuery })
+  });
 }
 
 function ownerHeaders() {

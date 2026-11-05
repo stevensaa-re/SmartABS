@@ -21,17 +21,28 @@ service cloud.firestore {
     function active() {
       return signedIn()
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && me().status == 'Aktif';
+        && me().status == 'Aktif'
+        && (me().get('schoolId', '') == ''
+          || (exists(/databases/$(database)/documents/schools/$(me().schoolId))
+            && get(/databases/$(database)/documents/schools/$(me().schoolId)).data.status == 'Aktif'));
     }
 
     function isAdmin()      { return active() && me().role == 'admin'; }
     function isGuru()       { return active() && me().role == 'guru'; }
     function isSiswa()      { return active() && me().role == 'siswa'; }
     function isStaff()      { return isAdmin() || isGuru(); }
+    function schoolId()     { return me().get('schoolId', ''); }
+    function sameSchool(data) {
+      return signedIn() && data.get('schoolId', '') == schoolId();
+    }
+    function newDataInMySchool() {
+      return sameSchool(request.resource.data);
+    }
     function assignedClass() { return me().get('className', ''); }
     function assignedSchedule(scheduleId) {
       return isGuru()
         && exists(/databases/$(database)/documents/schedules/$(scheduleId))
+        && sameSchool(get(/databases/$(database)/documents/schedules/$(scheduleId)).data)
         && get(/databases/$(database)/documents/schedules/$(scheduleId)).data.teacherUid == request.auth.uid;
     }
     function activeTeacher(uid) {
@@ -39,13 +50,15 @@ service cloud.firestore {
         && uid != ''
         && exists(/databases/$(database)/documents/users/$(uid))
         && get(/databases/$(database)/documents/users/$(uid)).data.role == 'guru'
-        && get(/databases/$(database)/documents/users/$(uid)).data.status == 'Aktif';
+        && get(/databases/$(database)/documents/users/$(uid)).data.status == 'Aktif'
+        && sameSchool(get(/databases/$(database)/documents/users/$(uid)).data);
     }
     function teaches(className) {
       return isGuru() && assignedClass() != '' && className == assignedClass();
     }
     function enrolledIn(studentId, className) {
       return exists(/databases/$(database)/documents/students/$(studentId))
+        && sameSchool(get(/databases/$(database)/documents/students/$(studentId)).data)
         && get(/databases/$(database)/documents/students/$(studentId)).data.className == className;
     }
 
@@ -54,45 +67,12 @@ service cloud.firestore {
     function myClassName() {
       return isSiswa() && myNis() != ''
         && exists(/databases/$(database)/documents/students/$(myNis()))
+        && sameSchool(get(/databases/$(database)/documents/students/$(myNis())).data)
         ? get(/databases/$(database)/documents/students/$(myNis())).data.className
         : '';
     }
     function qrSession(sessionId) {
       return get(/databases/$(database)/documents/attendanceSessions/$(sessionId)).data;
-    }
-    function validQrAttendance(id) {
-      return isSiswa()
-        && request.resource.data.keys().hasAll([
-          'sessionId', 'sessionToken', 'scheduleId', 'subject', 'studentId',
-          'name', 'className', 'date', 'time', 'status', 'note', 'createdAt',
-          'sessionStartedAt', 'source', 'teacherUid'
-        ])
-        && request.resource.data.keys().hasOnly([
-          'sessionId', 'sessionToken', 'scheduleId', 'subject', 'studentId',
-          'name', 'className', 'date', 'time', 'status', 'note', 'createdAt',
-          'sessionStartedAt', 'source', 'teacherUid'
-        ])
-        && exists(/databases/$(database)/documents/attendanceSessions/$(request.resource.data.sessionId))
-        && qrSession(request.resource.data.sessionId).active == true
-        && qrSession(request.resource.data.sessionId).expiresAt > request.time
-        && (qrSession(request.resource.data.sessionId).token == request.resource.data.sessionToken
-            || (qrSession(request.resource.data.sessionId).get('previousToken', '') != ''
-                && qrSession(request.resource.data.sessionId).previousToken == request.resource.data.sessionToken))
-        && qrSession(request.resource.data.sessionId).scheduleId == request.resource.data.scheduleId
-        && qrSession(request.resource.data.sessionId).teacherUid == request.resource.data.teacherUid
-        && request.resource.data.teacherUid == get(/databases/$(database)/documents/schedules/$(request.resource.data.scheduleId)).data.teacherUid
-        && qrSession(request.resource.data.sessionId).subject == request.resource.data.subject
-        && qrSession(request.resource.data.sessionId).className == request.resource.data.className
-        && qrSession(request.resource.data.sessionId).date == request.resource.data.date
-        && request.resource.data.studentId == myNis()
-        && request.resource.data.className == myClassName()
-        && request.resource.data.name == get(/databases/$(database)/documents/students/$(myNis())).data.name
-        && request.resource.data.status == 'Hadir'
-        && request.resource.data.source == 'qr'
-        && request.resource.data.time == request.time
-        && request.resource.data.createdAt == request.time
-        && request.resource.data.sessionStartedAt.seconds() == qrSession(request.resource.data.sessionId).createdAt.seconds()
-        && id == request.resource.data.sessionId + '_' + myNis();
     }
     function hasAttendanceHistory(id) {
       return request.resource.data.lastChangeId is string
@@ -123,7 +103,8 @@ service cloud.firestore {
       let permission = get(
         /databases/$(database)/documents/permissions/$(permissionId)
       ).data;
-      return permission.status in ['Disetujui', 'Ditolak']
+      return sameSchool(permission)
+        && permission.status in ['Disetujui', 'Ditolak']
         && permission.studentId == request.resource.data.studentId
         && permission.className == request.resource.data.className
         && permission.date == request.resource.data.date
@@ -141,6 +122,7 @@ service cloud.firestore {
             && !request.resource.data.keys().hasAny(['sessionId']))
           || (request.resource.data.scheduleId is string
             && exists(/databases/$(database)/documents/schedules/$(request.resource.data.scheduleId))
+            && sameSchool(get(/databases/$(database)/documents/schedules/$(request.resource.data.scheduleId)).data)
             && get(/databases/$(database)/documents/schedules/$(request.resource.data.scheduleId)).data.className
               == request.resource.data.className
             && get(/databases/$(database)/documents/schedules/$(request.resource.data.scheduleId)).data.subject
@@ -159,6 +141,7 @@ service cloud.firestore {
               || (request.resource.data.sessionId is string
                 && id == request.resource.data.sessionId + '_' + request.resource.data.studentId
                 && exists(/databases/$(database)/documents/attendanceSessions/$(request.resource.data.sessionId))
+                && sameSchool(qrSession(request.resource.data.sessionId))
                 && qrSession(request.resource.data.sessionId).date == request.resource.data.date
                 && qrSession(request.resource.data.sessionId).className == request.resource.data.className
                 && qrSession(request.resource.data.sessionId).scheduleId == request.resource.data.scheduleId
@@ -172,85 +155,111 @@ service cloud.firestore {
     // ---------- users ----------
     // Pengguna boleh membaca profilnya sendiri; admin mengelola semuanya.
     match /users/{uid} {
-      allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow read: if (isAdmin() && sameSchool(resource.data))
+        || (signedIn() && request.auth.uid == uid);
       allow create: if isAdmin()
+        && newDataInMySchool()
         && request.resource.data.role in ['admin', 'guru', 'siswa']
         && request.resource.data.status in ['Aktif', 'Nonaktif'];
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() && sameSchool(resource.data);
       // Admin boleh mengubah profil lain; pengguna tidak boleh mengubah role/status sendiri.
       allow update: if isAdmin()
+        && sameSchool(resource.data)
+        && newDataInMySchool()
         && request.resource.data.role in ['admin', 'guru', 'siswa']
         && request.resource.data.status in ['Aktif', 'Nonaktif'];
     }
 
     // ---------- data master ----------
     match /classes/{id} {
-      allow read: if isAdmin() || teaches(resource.data.name)
-        || (isSiswa() && resource.data.name == myClassName());
-      allow write: if isAdmin();
+      allow read: if sameSchool(resource.data)
+        && (isAdmin() || teaches(resource.data.name)
+          || (isSiswa() && resource.data.name == myClassName()));
+      allow create: if isAdmin() && newDataInMySchool();
+      allow update: if isAdmin() && sameSchool(resource.data) && newDataInMySchool();
+      allow delete: if isAdmin() && sameSchool(resource.data);
     }
 
     match /schedules/{id} {
-      allow read: if isAdmin() || (isGuru() && resource.data.teacherUid == request.auth.uid)
-        || (isSiswa() && resource.data.className == myClassName());
-      allow create: if isAdmin() && activeTeacher(request.resource.data.teacherUid);
-      allow update: if isAdmin() && activeTeacher(request.resource.data.teacherUid);
-      allow delete: if isAdmin();
+      allow read: if sameSchool(resource.data)
+        && (isAdmin() || (isGuru() && resource.data.teacherUid == request.auth.uid)
+          || (isSiswa() && resource.data.className == myClassName()));
+      allow create: if isAdmin() && newDataInMySchool()
+        && activeTeacher(request.resource.data.teacherUid);
+      allow update: if isAdmin() && sameSchool(resource.data) && newDataInMySchool()
+        && activeTeacher(request.resource.data.teacherUid);
+      allow delete: if isAdmin() && sameSchool(resource.data);
     }
 
     match /announcements/{id} {
-      allow read: if isAdmin() || (active() && resource.data.status == 'Publish');
-      allow write: if isAdmin();
+      allow read: if sameSchool(resource.data)
+        && (isAdmin() || (active() && resource.data.status == 'Publish'));
+      allow create: if isAdmin() && newDataInMySchool();
+      allow update: if isAdmin() && sameSchool(resource.data) && newDataInMySchool();
+      allow delete: if isAdmin() && sameSchool(resource.data);
     }
 
     match /teachers/{id} {
-      allow read: if isAdmin() || (isGuru() && resource.data.username == me().username);
-      allow write: if isAdmin();
+      allow read: if sameSchool(resource.data)
+        && (isAdmin() || (isGuru() && resource.data.username == me().username));
+      allow create: if isAdmin() && newDataInMySchool();
+      allow update: if isAdmin() && sameSchool(resource.data) && newDataInMySchool();
+      allow delete: if isAdmin() && sameSchool(resource.data);
     }
 
     match /students/{nis} {
-      allow read: if isAdmin() || teaches(resource.data.className) || (isSiswa() && nis == myNis());
-      allow write: if isAdmin();
+      allow read: if sameSchool(resource.data)
+        && (isAdmin() || teaches(resource.data.className) || (isSiswa() && nis == myNis()));
+      allow create: if isAdmin() && newDataInMySchool();
+      allow update: if isAdmin() && sameSchool(resource.data) && newDataInMySchool();
+      allow delete: if isAdmin() && sameSchool(resource.data);
     }
 
     // ---------- absensi ----------
     // Catatan lama memakai "{tanggal}_{nis}"; absensi QR memakai "{sesi}_{nis}".
     match /attendance/{id} {
-      allow read: if isAdmin()
-        || (isGuru() && resource.data.teacherUid == request.auth.uid)
-        || (isGuru() && resource.data.source == 'permission' && teaches(resource.data.className))
-        || (isSiswa() && myNis() != '' && id.matches('.*_' + myNis() + '$'))
-        || (isSiswa() && resource.data.studentId == myNis());
+      allow read: if (isSiswa() && myNis() != ''
+          && id.matches('.*_' + myNis() + '$')
+          && !exists(/databases/$(database)/documents/attendance/$(id)))
+        || (sameSchool(resource.data) && (isAdmin()
+          || (isGuru() && resource.data.teacherUid == request.auth.uid)
+          || (isGuru() && resource.data.source == 'permission' && teaches(resource.data.className))
+          || (isSiswa() && myNis() != '' && id.matches('.*_' + myNis() + '$'))
+          || (isSiswa() && resource.data.studentId == myNis())));
 
-      allow create: if (request.resource.data.source == 'permission' && validPermissionAttendance(id))
-        || validManualAttendance(id)
-        || validQrAttendance(id);
-      allow update: if (validPermissionAttendance(id)
-        && resource.data.studentId == request.resource.data.studentId
-        && resource.data.date == request.resource.data.date
-        && resource.data.className == request.resource.data.className)
+      allow create: if (newDataInMySchool()
+        && ((request.resource.data.source == 'permission' && validPermissionAttendance(id))
+          || validManualAttendance(id)));
+      allow update: if sameSchool(resource.data) && newDataInMySchool()
+        && ((validPermissionAttendance(id)
+          && resource.data.studentId == request.resource.data.studentId
+          && resource.data.date == request.resource.data.date
+          && resource.data.className == request.resource.data.className)
         || (validManualAttendance(id)
-        && resource.data.studentId == request.resource.data.studentId
-        && resource.data.date == request.resource.data.date
-        && (isAdmin() || (isGuru()
-          && resource.data.teacherUid == request.auth.uid
-          && request.resource.data.teacherUid == request.auth.uid))
-        && request.resource.data.studentId == resource.data.studentId
-        && request.resource.data.className == resource.data.className);
+          && resource.data.studentId == request.resource.data.studentId
+          && resource.data.date == request.resource.data.date
+          && (isAdmin() || (isGuru()
+            && resource.data.teacherUid == request.auth.uid
+            && request.resource.data.teacherUid == request.auth.uid))
+          && request.resource.data.studentId == resource.data.studentId
+          && request.resource.data.className == resource.data.className));
       allow delete: if false;
 
       // Absensi QR: satu dokumen per siswa per sesi, divalidasi terhadap token
       // aktif di server Rules menggunakan request.time, bukan jam perangkat siswa.
       match /history/{changeId} {
-        allow read: if isAdmin()
+        allow read: if exists(/databases/$(database)/documents/attendance/$(id))
+          && sameSchool(get(/databases/$(database)/documents/attendance/$(id)).data)
+          && (isAdmin()
           || (exists(/databases/$(database)/documents/attendance/$(id))
             && ((isGuru()
                 && get(/databases/$(database)/documents/attendance/$(id)).data.teacherUid == request.auth.uid)
               || (isGuru()
                 && get(/databases/$(database)/documents/attendance/$(id)).data.source == 'permission'
                 && teaches(get(/databases/$(database)/documents/attendance/$(id)).data.className))
-              || (isSiswa() && get(/databases/$(database)/documents/attendance/$(id)).data.studentId == myNis())));
+              || (isSiswa() && get(/databases/$(database)/documents/attendance/$(id)).data.studentId == myNis()))));
         allow create: if isStaff()
+          && sameSchool(getAfter(/databases/$(database)/documents/attendance/$(id)).data)
           && request.resource.data.actorUid == request.auth.uid
           && request.resource.data.reason is string
           && request.resource.data.reason.size() >= 5
@@ -279,58 +288,25 @@ service cloud.firestore {
 
     // ---------- sesi QR absensi ----------
     match /attendanceSessions/{id} {
-      allow read: if isAdmin() || (isGuru() && resource.data.teacherUid == request.auth.uid);
-      allow create: if (isAdmin() || isGuru())
-        && request.resource.data.keys().hasAll([
-          'scheduleId', 'subject', 'className', 'date', 'teacherUid', 'teacherName',
-          'token', 'previousToken', 'active', 'expiresAt', 'createdAt', 'updatedAt'
-        ])
-        && request.resource.data.keys().hasOnly([
-          'scheduleId', 'subject', 'className', 'date', 'teacherUid', 'teacherName',
-          'token', 'previousToken', 'active', 'expiresAt', 'createdAt', 'updatedAt'
-        ])
-        && request.resource.data.subject is string
-        && request.resource.data.subject.size() > 0
-        && request.resource.data.previousToken is string
-        && request.resource.data.createdAt == request.time
-        && request.resource.data.updatedAt == request.time
-        && request.resource.data.active == false
-        && exists(/databases/$(database)/documents/schedules/$(request.resource.data.scheduleId))
-        && get(/databases/$(database)/documents/schedules/$(request.resource.data.scheduleId)).data.className
-          == request.resource.data.className
-        && get(/databases/$(database)/documents/schedules/$(request.resource.data.scheduleId)).data.subject
-          == request.resource.data.subject
-        && get(/databases/$(database)/documents/schedules/$(request.resource.data.scheduleId)).data.teacherUid
-          == request.resource.data.teacherUid
-        && (isAdmin() || (assignedSchedule(request.resource.data.scheduleId)
-          && get(/databases/$(database)/documents/schedules/$(request.resource.data.scheduleId)).data.teacher
-            == me().name));
-      allow update: if isAdmin()
-        || (isGuru()
-          && resource.data.teacherUid == request.auth.uid
-          && assignedSchedule(resource.data.scheduleId)
-          && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['token', 'previousToken', 'expiresAt', 'updatedAt', 'active', 'closedAt'])
-          && request.resource.data.updatedAt == request.time
-          && (request.resource.data.active == false
-            || (request.resource.data.token is string
-              && request.resource.data.token.size() == 32
-              && request.resource.data.expiresAt > request.time)));
-      allow delete: if isAdmin() || isGuru();
+      allow read: if sameSchool(resource.data)
+        && (isAdmin() || (isGuru() && resource.data.teacherUid == request.auth.uid));
+      allow create, update, delete: if false;
     }
 
     // ---------- izin / sakit ----------
     match /permissions/{id} {
-      allow read: if isAdmin() || teaches(resource.data.className)
-        || (isSiswa() && resource.data.studentId == myNis());
-      allow update: if resource.data.status == 'Menunggu'
+      allow read: if sameSchool(resource.data)
+        && (isAdmin() || teaches(resource.data.className)
+          || (isSiswa() && resource.data.studentId == myNis()));
+      allow update: if sameSchool(resource.data) && newDataInMySchool()
+        && resource.data.status == 'Menunggu'
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
         && request.resource.data.status in ['Disetujui', 'Ditolak']
         && (isAdmin() || (teaches(resource.data.className)
           && teaches(request.resource.data.className)));
-      allow delete: if isAdmin() || teaches(resource.data.className);
+      allow delete: if sameSchool(resource.data) && (isAdmin() || teaches(resource.data.className));
 
-      allow create: if isAdmin()
+      allow create: if newDataInMySchool() && (isAdmin()
         || (isSiswa()
           && request.resource.data.keys().hasAll(['studentId', 'name', 'className', 'date', 'type', 'note', 'status'])
           && request.resource.data.keys().hasOnly(['studentId', 'name', 'className', 'date', 'type', 'note', 'status'])
@@ -339,13 +315,13 @@ service cloud.firestore {
           && request.resource.data.name == get(/databases/$(database)/documents/students/$(myNis())).data.name
           && request.resource.data.className == get(/databases/$(database)/documents/students/$(myNis())).data.className
           && request.resource.data.status == 'Menunggu'
-          && request.resource.data.type in ['Izin', 'Sakit']);
+          && request.resource.data.type in ['Izin', 'Sakit']));
     }
 
     // ---------- kalender akademik ----------
     match /calendarEvents/{id} {
-      allow read: if active();
-      allow create: if isAdmin()
+      allow read: if sameSchool(resource.data);
+      allow create: if isAdmin() && newDataInMySchool()
         && request.resource.data.keys().hasAll(['title', 'type', 'startDate', 'endDate', 'description', 'isHoliday', 'createdAt', 'updatedAt'])
         && request.resource.data.keys().hasOnly(['title', 'type', 'startDate', 'endDate', 'description', 'isHoliday', 'createdAt', 'updatedAt'])
         && request.resource.data.title is string
@@ -356,7 +332,7 @@ service cloud.firestore {
         && request.resource.data.isHoliday is bool
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time;
-      allow update: if isAdmin()
+      allow update: if isAdmin() && sameSchool(resource.data) && newDataInMySchool()
         && request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['title', 'type', 'startDate', 'endDate', 'description', 'isHoliday', 'updatedAt'])
         && request.resource.data.title is string
@@ -366,13 +342,13 @@ service cloud.firestore {
         && request.resource.data.startDate <= request.resource.data.endDate
         && request.resource.data.isHoliday is bool
         && request.resource.data.updatedAt == request.time;
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() && sameSchool(resource.data);
     }
 
     // Audit bersifat append-only dan hanya dapat dibaca admin.
     match /auditLogs/{id} {
-      allow read: if isAdmin();
-      allow create: if isStaff()
+      allow read: if isAdmin() && sameSchool(resource.data);
+      allow create: if isStaff() && newDataInMySchool()
         && request.resource.data.keys().hasAll(['actorUid', 'actorName', 'actorRole', 'action', 'entity', 'entityId', 'summary', 'createdAt'])
         && request.resource.data.keys().hasOnly(['actorUid', 'actorName', 'actorRole', 'action', 'entity', 'entityId', 'summary', 'createdAt'])
         && request.resource.data.actorUid == request.auth.uid

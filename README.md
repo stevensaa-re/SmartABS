@@ -23,10 +23,15 @@ tersedia di bawah tidak boleh dianggap sudah siap dipakai.
   penting dan histori koreksi absensi.
 - Aplikasi desktop Windows x64 menggunakan UI website; workflow CI menghasilkan installer dan
   portable `.exe`.
-- Dukungan Firebase Authentication + Cloud Firestore, serta backend MySQL untuk website.
+- Firebase Authentication + Cloud Firestore sebagai backend utama website dan Android.
+- Cloud Functions untuk provisioning akun serta operasi QR yang tidak boleh dipercaya pada klien.
 
-Notifikasi push saat aplikasi tertutup sengaja ditunda. Pengiriman otomatis memerlukan backend
-tepercaya dan tidak diaktifkan pada konfigurasi ini.
+MySQL dan `localStorage` masih tersedia sebagai kode/demo legacy, tetapi bukan backend produksi,
+bukan sumber data Android/Desktop, dan tidak menyediakan sinkronisasi lintas platform. Firebase
+adalah satu-satunya sumber data yang didukung untuk penggunaan bersama.
+Notifikasi push, unggahan Storage, dan integrasi tenant Android/migrasi data multi-sekolah belum
+selesai; lihat
+[FIREBASE_SETUP.md](./FIREBASE_SETUP.md) dan [REBUILD_PROGRESS.md](../REBUILD_PROGRESS.md).
 
 ## Menjalankan website
 
@@ -51,28 +56,44 @@ Mode `local` memakai `localStorage` browser dan hanya cocok untuk demo. Akun con
    firebase deploy --only firestore:rules,firestore:indexes
    ```
 
-4. Buat pengguna admin melalui Firebase Authentication, lalu buat dokumen `users/{uid}` yang
-   sesuai di Firestore. Hubungkan akun guru/siswa dengan profil akademiknya sebelum digunakan.
-5. Untuk database yang sudah berisi data, backup dahulu. Jangan menjalankan seed demo pada data
-   produksi.
+4. Pasang Cloud Functions dengan Node.js 22 sesuai
+   [FIREBASE_SETUP.md](./FIREBASE_SETUP.md); provisioning akun dan QR memerlukannya.
+5. Buat sekolah dan akun admin melalui proses bootstrap tepercaya yang didokumentasikan di sana.
+   Jangan mengaktifkan penggunaan multi-sekolah sebelum migrasi tenant dan pengujian Rules selesai.
+6. Untuk project yang sudah berisi data, buat backup dan verifikasi rencana migrasi sebelum
+   mengubah dokumen. Tidak ada deployment Firebase yang dijalankan oleh panduan ini.
 
 Website dan Android memakai project Firebase yang sama. Android memerlukan file
 `app/google-services.json` milik project tersebut; file itu tidak disertakan dalam repository ini.
 
-### Backend MySQL
+### MySQL legacy (bukan backend produksi)
+
+Kode REST/MySQL dipertahankan untuk kompatibilitas dan pengujian proyek lama. Jangan memilih
+`BACKEND: 'mysql'` untuk instalasi sekolah atau menghubungkannya ke aplikasi Android/Desktop;
+operasi itu akan membentuk sumber data terpisah dan tidak memenuhi arsitektur SMARTABS.
 
 ```bash
 cd server
 npm install
 cp .env.example .env
 # Isi DB_*, JWT_SECRET (acak dan minimal 32 karakter), serta CORS_ORIGIN di .env.
-npm run db:reset
+npm run db:init
+# Opsional, hanya untuk database kosong/demo:
+npm run db:seed
 npm start
 ```
 
-Atur `BACKEND: 'mysql'` dan `MYSQL.API_URL` di `js/config.js`. Gunakan `npm run db:init` untuk
-membuat tabel tanpa data demo. QR per mata pelajaran memerlukan Firebase dan tidak tersedia pada
-mode MySQL maupun local.
+`db:init` hanya membuat database/tabel yang belum ada dan tidak menghapus data. `db:seed`
+memasukkan data demo ke database kosong; jangan jalankan pada data sekolah. Perintah reset
+destruktif hanya diizinkan untuk `DB_NAME=smartabs_demo`, bukan pada `NODE_ENV=production`,
+dan memerlukan konfirmasi eksplisit:
+
+```bash
+DB_NAME=smartabs_demo npm run db:reset -- --confirm-destructive-reset
+```
+
+Perintah `db:init` tetap non-destruktif, tetapi skema dan migrasi MySQL bukan skema utama SMARTABS.
+Mode local/MySQL tidak mendukung backend terpadu Firebase Functions dan alur QR saat ini.
 
 Untuk database MySQL lama, buat salinan database lalu jalankan migrasi kalender/audit:
 
@@ -152,15 +173,15 @@ repository GitHub, pilih **Settings → Pages → Build and deployment → GitHu
 tambahkan domain hosting ke **Firebase Authentication → Authorized domains**. Mode Firebase
 memerlukan konfigurasi project milik pemilik deployment.
 
-## Catatan produksi
+## Catatan kesiapan
 
-- Pilih Firebase atau MySQL untuk data nyata; jangan gunakan backend `local`.
+- Gunakan Firebase; jangan gunakan backend `local` atau MySQL untuk data sekolah.
 - Ganti/hapus akun demo dan pastikan email serta status setiap akun benar.
-- Untuk MySQL, gunakan HTTPS, akun database dengan hak minimum, dan JWT secret acak.
-- Buat backup database terjadwal dan uji prosedur pemulihan sebelum operasi nyata.
-- Backup dari menu admin adalah ekspor/pemulihan manual client-side, bukan backup terjadwal.
-- Push notification tertunda; fitur itu memerlukan pengirim tepercaya dan belum termasuk dalam
-  rilis aplikasi.
+- Atur backup terjadwal pada Firebase dan uji pemulihan; ekspor dari menu admin adalah backup
+  manual client-side, bukan backup terjadwal.
+- Isolasi multi-sekolah, push notification, dan sebagian integrasi platform masih berstatus
+  pekerjaan berjalan; jangan gunakan sebagai sistem produksi multi-tenant sebelum gerbang akhir
+  pada [REBUILD_PROGRESS.md](../REBUILD_PROGRESS.md) ditutup.
 
 ## Kontribusi pengembangan
 

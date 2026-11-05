@@ -85,10 +85,37 @@
         <input type="hidden" id="teacherId">
 
         <div class="form-group">
-          <label for="teacherUsername">Akun Guru <span class="req">*</span></label>
+          <label class="checkbox-label" for="teacherCreateAccount">
+            <input type="checkbox" id="teacherCreateAccount">
+            Buat akun login guru baru
+          </label>
+          <small class="text-muted">Akun dibuat dan langsung ditautkan saat profil guru disimpan.</small>
+        </div>
+
+        <div id="teacherNewAccountFields">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="teacherNewUsername">Username <span class="req">*</span></label>
+              <input type="text" id="teacherNewUsername" class="form-control" autocomplete="off">
+              <small class="form-error" id="errTeacherNewUsername"></small>
+            </div>
+            <div class="form-group">
+              <label for="teacherNewEmail">Email login <span class="req">*</span></label>
+              <input type="email" id="teacherNewEmail" class="form-control" autocomplete="off">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="teacherNewPassword">Password awal <span class="req">*</span></label>
+            <input type="password" id="teacherNewPassword" class="form-control" autocomplete="new-password" minlength="6">
+            <small class="text-muted">Berikan password awal ini kepada guru secara aman.</small>
+          </div>
+        </div>
+
+        <div class="form-group" id="teacherExistingAccountField">
+          <label for="teacherUsername">Hubungkan ke akun Guru <span class="req">*</span></label>
           <select id="teacherUsername" class="form-control" required></select>
           <small class="form-error" id="errTeacherUsername"></small>
-          <small class="text-muted">Hanya akun dengan role Guru yang belum terdaftar yang tampil di sini.</small>
+          <small class="text-muted">Hanya akun guru aktif yang belum terhubung yang tersedia.</small>
         </div>
 
         <div class="form-group">

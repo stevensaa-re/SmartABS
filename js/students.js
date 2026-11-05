@@ -38,6 +38,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('closeStudentModal').addEventListener('click', () => closeModal('studentModal'));
     document.getElementById('cancelStudentModal').addEventListener('click', () => closeModal('studentModal'));
     document.getElementById('studentForm').addEventListener('submit', simpanSiswa);
+    document.getElementById('studentCreateAccount').addEventListener('change', toggleStudentAccountFields);
     document.getElementById('closeDetailModal').addEventListener('click', () => closeModal('detailModal'));
     document.getElementById('closeDetailBtn').addEventListener('click', () => closeModal('detailModal'));
     renderSiswaAdmin();
@@ -163,6 +164,11 @@ function openStudentForm(nis = null) {
   document.getElementById('studentMode').value = nis || '';
   document.getElementById('studentModalTitle').textContent = nis ? 'Edit Siswa' : 'Tambah Siswa';
   document.getElementById('studentNis').readOnly = !!nis;
+  document.getElementById('studentCreateAccount').checked = !nis;
+  document.getElementById('studentNewUsername').value = '';
+  document.getElementById('studentNewEmail').value = '';
+  document.getElementById('studentNewPassword').value = '';
+  toggleStudentAccountFields();
   isiPilihanAkun(nis);
 
   if (nis) {
@@ -195,6 +201,10 @@ async function simpanSiswa(event) {
   const phone    = document.getElementById('studentPhone').value.trim();
   const userId   = document.getElementById('studentUser').value;
   const mode     = document.getElementById('studentMode').value;
+  const createAccount = !mode && document.getElementById('studentCreateAccount').checked;
+  const username = document.getElementById('studentNewUsername').value.trim();
+  const email = document.getElementById('studentNewEmail').value.trim();
+  const password = document.getElementById('studentNewPassword').value;
 
   let valid = true;
   document.getElementById('errStudentNis').textContent = '';
@@ -207,6 +217,20 @@ async function simpanSiswa(event) {
   if (name.length < 3) {
     document.getElementById('errStudentName').textContent = 'Nama minimal 3 karakter.';
     valid = false;
+  }
+  if (createAccount) {
+    if (!/^[A-Za-z0-9._-]{3,50}$/.test(username)) {
+      Toast.warning('Username siswa harus 3-50 karakter: huruf, angka, titik, garis bawah, atau strip.');
+      valid = false;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      Toast.warning('Masukkan email login siswa dengan format yang valid.');
+      valid = false;
+    }
+    if (password.length < 6) {
+      Toast.warning('Password awal minimal 6 karakter.');
+      valid = false;
+    }
   }
   if (!className || !daftarKelas.some((kelas) => kelas.name === className)) {
     Toast.warning(daftarKelas.length
@@ -221,17 +245,47 @@ async function simpanSiswa(event) {
   button.textContent = 'Menyimpan...';
 
   try {
-    const payload = { nis, name, className, gender, status, phone, userId };
+    let linkedUserId = userId;
+    let account = null;
+    if (createAccount) {
+      if (APP_CONFIG.BACKEND === 'firebase') {
+        await API.createStudentAccount({
+          account: { name, username, email, password },
+          student: { nis, className, gender, status, phone }
+        });
+      } else {
+        account = await API.createUser({
+          name, username, email, password, role: 'siswa', status: 'Aktif'
+        });
+        linkedUserId = account.id;
+      }
+    }
+    const payload = { nis, name, className, gender, status, phone, userId: linkedUserId };
 
     if (mode) {
       await API.updateStudent(mode, payload);
       Toast.success('Data siswa berhasil diperbarui.');
+    } else if (APP_CONFIG.BACKEND === 'firebase' && createAccount) {
+      Toast.success('Akun dan profil siswa berhasil dibuat.');
     } else {
-      await API.createStudent(payload);
+      try {
+        await API.createStudent(payload);
+      } catch (error) {
+        if (account) {
+          try {
+            await API.updateUser(account.id, { status: 'Nonaktif' });
+          } catch (cleanupError) {
+            throw new Error(`${error.message} Akun baru juga gagal dinonaktifkan: ${cleanupError.message}`);
+          }
+          throw new Error(`${error.message} Akun yang sempat dibuat telah dinonaktifkan; periksa akun sebelum mencoba lagi.`);
+        }
+        throw error;
+      }
       Toast.success('Siswa baru berhasil ditambahkan.');
     }
 
-    daftarSiswa = await API.getStudents();
+    [daftarSiswa, daftarAkunSiswa] = await Promise.all([API.getStudents(), API.getUsers()]);
+    daftarAkunSiswa = daftarAkunSiswa.filter((user) => user.role === 'siswa' && user.status === 'Aktif');
     renderSiswaAdmin();
     closeModal('studentModal');
 
@@ -241,6 +295,12 @@ async function simpanSiswa(event) {
     button.disabled = false;
     button.textContent = 'Simpan';
   }
+}
+
+function toggleStudentAccountFields() {
+  const creating = document.getElementById('studentCreateAccount').checked;
+  document.getElementById('studentNewAccountFields').hidden = !creating;
+  document.getElementById('studentExistingAccountField').hidden = creating;
 }
 
 async function hapusSiswa(nis) {

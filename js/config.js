@@ -31,6 +31,7 @@ const APP_CONFIG = {
     appId: '1:506493403997:web:ee7b6d48d06e6d30f55eb4',
     measurementId: 'G-N3RJBY96W0'
   },
+  FIREBASE_FUNCTIONS_REGION: 'asia-southeast1',
 
     /* Akun lama dapat login dengan username yang dipetakan ke domain ini.
       Akun baru memakai email Firebase Auth yang diinput saat dibuat. */

@@ -1,8 +1,8 @@
 /* =========================================================
-   Inisialisasi database
-     npm run db:init    -> buat database & tabel (MENGHAPUS data lama)
-     npm run db:seed    -> isi data demo
-     npm run db:reset   -> keduanya
+   Database setup
+     npm run db:init    -> create missing database tables without dropping data
+     npm run db:seed    -> add demo data to an empty database
+     npm run db:reset   -> reset only DB_NAME=smartabs_demo, with confirmation flag
    ========================================================= */
 
 require('dotenv').config();
@@ -12,8 +12,17 @@ const path = require('path');
 const mysql = require('mysql2/promise');
 const bcrypt = require('bcryptjs');
 const seed = require('../../database/seed-data');
+const { assertSafeDemoReset, assertSafeDemoSeed } = require('./db-reset-guard');
 
 const args = process.argv.slice(2);
+
+function databaseName() {
+  const name = process.env.DB_NAME || 'smartabs';
+  if (!/^[A-Za-z0-9_]+$/.test(name)) {
+    throw new Error('DB_NAME hanya boleh berisi huruf, angka, dan garis bawah.');
+  }
+  return name;
+}
 
 async function connect(withDatabase) {
   return mysql.createConnection({
@@ -21,16 +30,17 @@ async function connect(withDatabase) {
     port: Number(process.env.DB_PORT || 3306),
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASSWORD || '',
-    database: withDatabase ? (process.env.DB_NAME || 'smartabs') : undefined,
+    database: withDatabase ? databaseName() : undefined,
     multipleStatements: true,
     charset: 'utf8mb4'
   });
 }
 
 async function applySchema() {
+  const name = databaseName();
   const sql = fs.readFileSync(path.join(__dirname, '../../database/mysql/schema.sql'), 'utf8')
-    .replace(/CREATE DATABASE IF NOT EXISTS smartabs/g, `CREATE DATABASE IF NOT EXISTS \`${process.env.DB_NAME || 'smartabs'}\``)
-    .replace(/USE smartabs;/g, `USE \`${process.env.DB_NAME || 'smartabs'}\`;`);
+    .replace(/CREATE DATABASE IF NOT EXISTS smartabs/g, `CREATE DATABASE IF NOT EXISTS \`${name}\``)
+    .replace(/USE smartabs;/g, `USE \`${name}\`;`);
 
   const connection = await connect(false);
   await connection.query(sql);
@@ -38,7 +48,39 @@ async function applySchema() {
   console.log('✔ Skema database dibuat.');
 }
 
+async function resetDemoDatabase() {
+  assertSafeDemoReset({
+    databaseName: databaseName(),
+    nodeEnv: process.env.NODE_ENV,
+    confirmed: args.includes('--confirm-destructive-reset')
+  });
+
+  const db = await connect(true);
+  try {
+    await db.query('SET FOREIGN_KEY_CHECKS = 0');
+    await db.query([
+      'DROP TABLE IF EXISTS permissions',
+      'DROP TABLE IF EXISTS audit_logs',
+      'DROP TABLE IF EXISTS calendar_events',
+      'DROP TABLE IF EXISTS attendance',
+      'DROP TABLE IF EXISTS schedules',
+      'DROP TABLE IF EXISTS announcements',
+      'DROP TABLE IF EXISTS teachers',
+      'DROP TABLE IF EXISTS students',
+      'DROP TABLE IF EXISTS classes',
+      'DROP TABLE IF EXISTS users'
+    ].join('; '));
+    await db.query('SET FOREIGN_KEY_CHECKS = 1');
+  } finally {
+    await db.end();
+  }
+}
+
 async function seedData() {
+  assertSafeDemoSeed({
+    databaseName: databaseName(),
+    nodeEnv: process.env.NODE_ENV
+  });
   const db = await connect(true);
   const idOf = {};
 
@@ -109,14 +151,23 @@ async function seedData() {
   }
 }
 
-(async () => {
-  if (!args.includes('--schema') && !args.includes('--seed')) {
-    console.log('Gunakan: npm run db:init | db:seed | db:reset');
+async function main() {
+  if (args.includes('--reset')) {
+    await resetDemoDatabase();
+    await applySchema();
+    await seedData();
     return;
+  }
+  if (!args.includes('--schema') && !args.includes('--seed')) {
+    throw new Error('Gunakan: npm run db:init | db:seed | db:reset -- --confirm-destructive-reset');
   }
   if (args.includes('--schema')) await applySchema();
   if (args.includes('--seed')) await seedData();
-})().catch((error) => {
-  console.error('✘ Gagal:', error.message);
-  process.exit(1);
-});
+}
+
+if (require.main === module) {
+  main().catch((error) => {
+    console.error('✘ Gagal:', error.message);
+    process.exitCode = 1;
+  });
+}

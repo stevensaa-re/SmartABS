@@ -8,9 +8,10 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
+    "test": "node --test",
     "db:init": "node src/seed.js --schema",
     "db:seed": "node src/seed.js --seed",
-    "db:reset": "node src/seed.js --schema --seed"
+    "db:reset": "node src/seed.js --reset"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
