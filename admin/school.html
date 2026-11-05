@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Setup Sekolah — SMARTABS</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/table.css">
+  <link rel="stylesheet" href="../css/responsive.css">
+  <script src="../js/config.js"></script>
+  <script src="../js/utils.js"></script>
+  <script src="../js/auth.js"></script>
+  <style>
+    .setup-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:1rem; }
+    .setup-check { padding:1rem; border:1px solid var(--border-color,#e5e7eb); border-radius:.6rem; }
+    .setup-check.complete { border-color:#86efac; background:#f0fdf4; }
+    .setup-check.incomplete { border-color:#fcd34d; background:#fffbeb; }
+    .master-fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:.8rem; }
+    .master-fields .form-group { margin:0; }
+    .school-logo-preview { max-width:110px; max-height:80px; object-fit:contain; }
+    .upload-preview { min-height:2rem; }
+  </style>
+</head>
+<body data-role="admin" data-page="school">
+<script src="../js/guard.js"></script>
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+  <div class="main">
+    <header class="navbar" id="navbar"></header>
+    <main class="content">
+      <div class="page-head">
+        <div>
+          <h1>Setup Sekolah & Data Akademik</h1>
+          <p>Lengkapi profil, lalu kelola master akademik untuk semester dan jadwal.</p>
+        </div>
+      </div>
+      <section class="card">
+        <h2>Checklist konfigurasi</h2>
+        <div id="setupChecklist" class="setup-grid" aria-live="polite"></div>
+      </section>
+      <section class="card">
+        <h2>Profil dan Operasional Sekolah</h2>
+        <form id="schoolProfileForm">
+          <div class="form-row">
+            <div class="form-group"><label for="schoolName">Nama sekolah *</label><input id="schoolName" class="form-control" maxlength="150" required></div>
+            <div class="form-group"><label for="schoolNpsn">NPSN *</label><input id="schoolNpsn" class="form-control" inputmode="numeric" pattern="\d{8}" maxlength="8" required></div>
+            <div class="form-group"><label for="schoolLevel">Jenjang *</label>
+              <select id="schoolLevel" class="form-control" required>
+                <option value="SD">SD</option><option value="SMP">SMP</option><option value="SMA">SMA</option><option value="SMK">SMK</option>
+              </select>
+            </div>
+            <div class="form-group"><label for="schoolType">Status *</label>
+              <select id="schoolType" class="form-control" required><option>Negeri</option><option>Swasta</option></select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label for="schoolAddress">Alamat</label><input id="schoolAddress" class="form-control" maxlength="500"></div>
+            <div class="form-group"><label for="schoolPhone">Telepon</label><input id="schoolPhone" class="form-control" maxlength="30"></div>
+            <div class="form-group"><label for="schoolEmail">Email</label><input id="schoolEmail" type="email" class="form-control" maxlength="120"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label for="principalName">Kepala sekolah *</label><input id="principalName" class="form-control" maxlength="100" required></div>
+            <div class="form-group"><label for="schoolAcademicYear">Tahun ajaran aktif *</label><input id="schoolAcademicYear" class="form-control" placeholder="2026/2027" pattern="\d{4}/\d{4}" required></div>
+            <div class="form-group"><label>Semester aktif</label><input id="activeSemesterName" class="form-control" readonly></div>
+            <div class="form-group"><label for="schoolTimeZone">Zona waktu *</label>
+              <select id="schoolTimeZone" class="form-control" required>
+                <option value="Asia/Jakarta">WIB — Asia/Jakarta</option>
+                <option value="Asia/Makassar">WITA — Asia/Makassar</option>
+                <option value="Asia/Jayapura">WIT — Asia/Jayapura</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label for="schoolOpen">Jam masuk *</label><input id="schoolOpen" type="time" class="form-control" required></div>
+            <div class="form-group"><label for="schoolClose">Jam pulang *</label><input id="schoolClose" type="time" class="form-control" required></div>
+            <div class="form-group"><label for="lateTolerance">Toleransi terlambat (menit) *</label><input id="lateTolerance" type="number" min="0" max="180" class="form-control" required></div>
+          </div>
+          <fieldset class="form-group">
+            <legend>Hari operasional *</legend>
+            <label class="semester-copy-type"><input type="checkbox" name="operatingDay" value="Senin"> Senin</label>
+            <label class="semester-copy-type"><input type="checkbox" name="operatingDay" value="Selasa"> Selasa</label>
+            <label class="semester-copy-type"><input type="checkbox" name="operatingDay" value="Rabu"> Rabu</label>
+            <label class="semester-copy-type"><input type="checkbox" name="operatingDay" value="Kamis"> Kamis</label>
+            <label class="semester-copy-type"><input type="checkbox" name="operatingDay" value="Jumat"> Jumat</label>
+            <label class="semester-copy-type"><input type="checkbox" name="operatingDay" value="Sabtu"> Sabtu</label>
+          </fieldset>
+          <div class="form-row">
+            <div class="form-group"><label for="schoolLogoFile">Logo sekolah (gambar)</label><input id="schoolLogoFile" type="file" class="form-control" accept="image/png,image/jpeg,image/webp"><small class="text-muted">Logo disimpan di Firebase Storage. Maksimal 2 MB.</small></div>
+            <div class="form-group"><label>Pratinjau logo</label><div class="upload-preview" id="logoPreview"></div></div>
+          </div>
+          <div class="modal-footer"><button type="submit" class="btn btn-primary" id="saveSchoolButton">Simpan Profil Sekolah</button></div>
+        </form>
+      </section>
+      <section class="card">
+        <div class="page-head">
+          <div><h2>Master Data Akademik</h2><p class="text-muted">ID dokumen digunakan sebagai relasi; kode dan nama hanya label tampilan.</p></div>
+          <button type="button" class="btn btn-outline" id="exportSubjectsButton"><i class="fa-solid fa-download"></i> Ekspor CSV Mapel</button>
+        </div>
+        <div class="table-toolbar">
+          <div class="search-box"><i class="fa-solid fa-magnifying-glass"></i><input id="masterSearch" class="form-control" placeholder="Cari data akademik..."></div>
+          <div class="filter-group">
+            <select id="masterType" class="form-control">
+              <option value="programs">Jurusan / Program Keahlian</option>
+              <option value="academicLevels">Tingkat Kelas</option>
+              <option value="rooms">Ruangan</option>
+              <option value="subjects">Mata Pelajaran</option>
+              <option value="classes">Rombongan Belajar</option>
+            </select>
+            <select id="masterStatus" class="form-control"><option value="">Semua Status</option><option value="true">Aktif</option><option value="false">Nonaktif</option></select>
+          </div>
+        </div>
+        <div class="action-btns">
+          <button type="button" class="btn btn-primary" id="addMasterButton"><i class="fa-solid fa-plus"></i> Tambah Data</button>
+          <label class="btn btn-outline" for="subjectCsvFile"><i class="fa-solid fa-file-import"></i> Preview Import Mapel</label>
+          <input id="subjectCsvFile" type="file" accept=".csv,text/csv" hidden>
+          <button type="button" class="btn btn-outline" id="importSubjectsButton" disabled>Import Mapel</button>
+        </div>
+        <div id="subjectImportPreview" class="semester-notice semester-notice-info" hidden aria-live="polite"></div>
+        <div class="table-wrap">
+          <table class="data-table"><thead id="masterHead"></thead><tbody id="masterBody"></tbody></table>
+        </div>
+        <div class="table-footer"><span id="masterCount" class="text-muted"></span><button class="btn btn-outline btn-sm" id="masterPrev">Sebelumnya</button><span id="masterPage"></span><button class="btn btn-outline btn-sm" id="masterNext">Berikutnya</button></div>
+      </section>
+      <section class="card">
+        <h2>Semester, penugasan, dan jadwal</h2>
+        <p>Semester aktif dan Draft dikelola pada satu alur. Jadwal dan penugasan semester Draft dapat ditinjau sebelum diaktifkan.</p>
+        <a class="btn btn-outline" href="semesters.html">Buka Persiapan Semester</a>
+        <a class="btn btn-outline" href="schedule.html">Buka Jadwal Aktif</a>
+      </section>
+    </main>
+  </div>
+</div>
+<div class="modal" id="masterModal">
+  <div class="modal-dialog">
+    <div class="modal-header"><h3 id="masterModalTitle">Tambah Data Akademik</h3><button type="button" class="icon-btn" id="closeMasterModal" aria-label="Tutup"><i class="fa-solid fa-xmark"></i></button></div>
+    <form id="masterForm"><div class="modal-body"><input type="hidden" id="masterRecordId"><div id="masterFields" class="master-fields"></div></div>
+      <div class="modal-footer"><button type="button" class="btn btn-outline" id="cancelMasterModal">Batal</button><button type="submit" class="btn btn-primary" id="saveMasterButton">Simpan</button></div></form>
+  </div>
+</div>
+<script src="../js/mock-data.js"></script>
+<script src="../js/adapters/local.js"></script>
+<script src="../js/adapters/mysql.js"></script>
+<script src="../js/adapters/firebase.js"></script>
+<script src="../js/api.js"></script>
+<script src="../js/notifications.js"></script>
+<script src="../js/app.js"></script>
+<script src="../js/school-setup.js"></script>
+</body>
+</html>

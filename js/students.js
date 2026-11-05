@@ -227,7 +227,7 @@ async function simpanSiswa(event) {
       Toast.warning('Masukkan email login siswa dengan format yang valid.');
       valid = false;
     }
-    if (password.length < 6) {
+    if (APP_CONFIG.BACKEND !== 'firebase' && password.length < 6) {
       Toast.warning('Password awal minimal 6 karakter.');
       valid = false;
     }
@@ -247,11 +247,16 @@ async function simpanSiswa(event) {
   try {
     let linkedUserId = userId;
     let account = null;
+    let provisioningResult = null;
     if (createAccount) {
       if (APP_CONFIG.BACKEND === 'firebase') {
-        await API.createStudentAccount({
+        provisioningResult = await API.createStudentAccount({
           account: { name, username, email, password },
-          student: { nis, className, gender, status, phone }
+          student: {
+            nis,
+            classId: daftarKelas.find((kelas) => kelas.name === className)?.id || '',
+            className, gender, status, phone
+          }
         });
       } else {
         account = await API.createUser({
@@ -260,13 +265,20 @@ async function simpanSiswa(event) {
         linkedUserId = account.id;
       }
     }
-    const payload = { nis, name, className, gender, status, phone, userId: linkedUserId };
+    const payload = {
+      nis, name, className, gender, status, phone, userId: linkedUserId,
+      classId: daftarKelas.find((kelas) => kelas.name === className)?.id || ''
+    };
 
     if (mode) {
       await API.updateStudent(mode, payload);
       Toast.success('Data siswa berhasil diperbarui.');
     } else if (APP_CONFIG.BACKEND === 'firebase' && createAccount) {
-      Toast.success('Akun dan profil siswa berhasil dibuat.');
+      if (provisioningResult?.invitationSent) {
+        Toast.success('Akun dan profil siswa berhasil dibuat. Email pengaturan password telah dikirim.');
+      } else {
+        Toast.warning(provisioningResult?.invitationError || 'Akun dibuat, tetapi status email pengaturan password tidak diketahui.');
+      }
     } else {
       try {
         await API.createStudent(payload);

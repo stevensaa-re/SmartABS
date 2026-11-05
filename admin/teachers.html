@@ -105,9 +105,9 @@
             </div>
           </div>
           <div class="form-group">
-            <label for="teacherNewPassword">Password awal <span class="req">*</span></label>
+            <label for="teacherNewPassword">Password awal (khusus mode demo/API)</label>
             <input type="password" id="teacherNewPassword" class="form-control" autocomplete="new-password" minlength="6">
-            <small class="text-muted">Berikan password awal ini kepada guru secara aman.</small>
+            <small class="text-muted">Firebase mengirim email pengaturan password; password tidak disimpan dalam profil.</small>
           </div>
         </div>
 
@@ -131,9 +131,9 @@
 
         <div class="form-row">
           <div class="form-group">
-            <label for="teacherClass">Kelas Diampu <span class="req">*</span></label>
-            <select id="teacherClass" class="form-control" required></select>
-            <small class="text-muted" id="teacherClassHint"></small>
+            <label for="teacherClass">Kelas (legacy; penugasan dikelola di semester)</label>
+            <select id="teacherClass" class="form-control"></select>
+            <small class="text-muted" id="teacherClassHint">Penugasan guru yang sebenarnya dikelola pada konfigurasi semester.</small>
           </div>
           <div class="form-group">
             <label for="teacherStatus">Status</label>

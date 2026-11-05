@@ -130,6 +130,9 @@
             <h2>Konfigurasi Semester Tujuan</h2>
             <p class="text-muted">Konfigurasi Draft dapat diedit atau dihapus sebelum diaktifkan.</p>
           </div>
+          <button type="button" class="btn btn-primary" id="addConfigurationButton">
+            <i class="fa-solid fa-plus"></i> Tambah Konfigurasi
+          </button>
         </div>
         <div class="table-wrap">
           <table class="data-table">
@@ -157,6 +160,16 @@
         <input type="hidden" id="configurationId">
         <input type="hidden" id="configurationType">
         <input type="hidden" id="configurationClassId">
+        <div class="form-group">
+          <label for="configurationTypeSelector">Jenis konfigurasi</label>
+          <select id="configurationTypeSelector" class="form-control" required>
+            <option value="subjects">Mata pelajaran per kelas</option>
+            <option value="teacherAssignments">Penugasan guru</option>
+            <option value="schedules">Jadwal pelajaran</option>
+            <option value="periods">Jam pelajaran</option>
+            <option value="classes">Konfigurasi kelas</option>
+          </select>
+        </div>
         <div id="configurationFields"></div>
       </div>
       <div class="modal-footer">

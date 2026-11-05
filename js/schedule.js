@@ -8,6 +8,7 @@
 const HARI_SEKOLAH = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
 
 let daftarJadwal = [];
+let scheduleSetup = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
   const page = document.body.dataset.page;
@@ -40,11 +41,19 @@ function barisHari(hari, jumlah, kolom) {
 
 async function initJadwalAdmin() {
   const tbody = document.getElementById('scheduleTableBody');
-  tbody.innerHTML = loadingRow(6);
+  tbody.innerHTML = loadingRow(7);
 
-  const [schedules, classes] = await Promise.all([API.getSchedules(), API.getClasses()]);
+  if (API.name !== 'firebase') {
+    Toast.warning('Pengelolaan jadwal aktif memerlukan Firebase dan konfigurasi semester.');
+    document.getElementById('btnAddSchedule').disabled = true;
+    return;
+  }
+  const [schedules, setup] = await Promise.all([API.getSchedules(), API.getSchoolSetup()]);
+  scheduleSetup = setup;
+  const classes = (setup.records.classes || []).filter((item) => item.isActive !== false);
 
   daftarJadwal = schedules;
+  document.getElementById('btnAddSchedule').disabled = !setup.school.activeSemesterId;
 
   /* Filter hari */
   document.getElementById('filterScheduleDay').innerHTML =
@@ -54,14 +63,19 @@ async function initJadwalAdmin() {
   /* Filter kelas */
   document.getElementById('filterScheduleClass').innerHTML =
     '<option value="">Semua Kelas</option>' +
-    classes.map((kelas) => `<option value="${escapeHtml(kelas.name)}">${escapeHtml(kelas.name)}</option>`).join('');
+    classes.map((kelas) => `<option value="${escapeHtml(kelas.id)}">${escapeHtml(kelas.name)}</option>`).join('');
 
   /* Pilihan pada form */
+  const operatingDays = setup.school.operatingDays?.length ? setup.school.operatingDays : HARI_SEKOLAH;
   document.getElementById('scheduleDay').innerHTML =
-    HARI_SEKOLAH.map((hari) => `<option value="${hari}">${hari}</option>`).join('');
+    operatingDays.map((hari) => `<option value="${escapeHtml(hari)}">${escapeHtml(hari)}</option>`).join('');
 
   document.getElementById('scheduleClass').innerHTML =
-    classes.map((kelas) => `<option value="${escapeHtml(kelas.name)}">${escapeHtml(kelas.name)}</option>`).join('');
+    '<option value="">— Pilih kelas —</option>' +
+    classes.map((kelas) => `<option value="${escapeHtml(kelas.id)}">${escapeHtml(kelas.name)}</option>`).join('');
+  document.getElementById('scheduleRoom').innerHTML = roomOptions();
+  document.getElementById('scheduleClass').addEventListener('change', () => configureSchedulePickers());
+  document.getElementById('scheduleSubject').addEventListener('change', () => configureScheduleTeachers());
 
   renderJadwalAdmin();
 
@@ -86,7 +100,7 @@ function renderJadwalAdmin() {
     String(jadwal.subject || '').toLowerCase().includes(keyword) ||
     String(jadwal.teacher || '').toLowerCase().includes(keyword);
     const cocokHari = !hari || jadwal.day === hari;
-    const cocokKelas = !kelas || jadwal.className === kelas;
+    const cocokKelas = !kelas || jadwal.classId === kelas;
     return cocokKeyword && cocokHari && cocokKelas;
   });
 
@@ -100,12 +114,13 @@ function renderJadwalAdmin() {
       .map((hari) => {
         const jadwalHari = urut.filter((jadwal) => jadwal.day === hari);
         if (!jadwalHari.length) return '';
-        return barisHari(hari, jadwalHari.length, 6) + jadwalHari.map((jadwal) => `
+        return barisHari(hari, jadwalHari.length, 7) + jadwalHari.map((jadwal) => `
           <tr>
             <td class="cell-strong">${escapeHtml(jadwal.start)} - ${escapeHtml(jadwal.end)}</td>
             <td>${escapeHtml(jadwal.subject)}</td>
             <td>${escapeHtml(jadwal.teacher)}</td>
             <td>${escapeHtml(jadwal.className)}</td>
+            <td>${escapeHtml(jadwal.roomName || '-')}</td>
             <td colspan="2">
               <div class="action-btns">
                 <button class="btn-icon" data-action="edit" data-id="${escapeHtml(jadwal.id)}" title="Edit jadwal ${escapeHtml(jadwal.subject)}" aria-label="Edit jadwal ${escapeHtml(jadwal.subject)}">
@@ -118,7 +133,7 @@ function renderJadwalAdmin() {
             </td>
           </tr>`).join('');
       }).join('')
-    : emptyTableRow(6, 'Jadwal tidak ditemukan', 'Coba ubah filter atau tambahkan jadwal baru.');
+    : emptyTableRow(7, 'Jadwal tidak ditemukan', 'Coba ubah filter atau tambahkan jadwal baru.');
 
   document.getElementById('scheduleCount').textContent = `${urut.length} jadwal ditampilkan`;
 
@@ -143,15 +158,60 @@ function openScheduleForm(id = null) {
     const jadwal = daftarJadwal.find((item) => item.id === id);
     if (jadwal) {
       document.getElementById('scheduleDay').value = jadwal.day;
-      document.getElementById('scheduleClass').value = jadwal.className;
+      const classId = jadwal.classId ||
+        (scheduleSetup.records.classes || []).find((item) => item.name === jadwal.className)?.id || '';
+      document.getElementById('scheduleClass').value = classId;
       document.getElementById('scheduleStart').value = jadwal.start;
       document.getElementById('scheduleEnd').value = jadwal.end;
-      document.getElementById('scheduleSubject').value = jadwal.subject;
-      document.getElementById('scheduleTeacher').value = jadwal.teacher;
+      configureSchedulePickers(classId, jadwal.subjectId, jadwal.teacherUid);
+      document.getElementById('scheduleRoom').value = jadwal.roomId || '';
     }
+  } else {
+    configureSchedulePickers();
   }
 
   openModal('scheduleModal');
+}
+
+function roomOptions(selectedId = '') {
+  const rooms = (scheduleSetup?.records.rooms || []).filter((item) => item.isActive);
+  return `<option value="">— Pilih ruangan —</option>${rooms.map((room) =>
+    `<option value="${escapeHtml(room.id)}" ${room.id === selectedId ? 'selected' : ''}>${escapeHtml(room.code)} — ${escapeHtml(room.name)}</option>`
+  ).join('')}`;
+}
+
+function configureSchedulePickers(classId = document.getElementById('scheduleClass').value,
+  subjectId = document.getElementById('scheduleSubject').value, teacherUid = document.getElementById('scheduleTeacher').value) {
+  const classRows = (scheduleSetup?.records.semesterConfigurations || [])
+    .filter((row) => row.type === 'subjects' && row.payload.classId === classId);
+  const subjects = new Map((scheduleSetup?.records.subjects || []).map((item) => [item.id, item]));
+  const availableSubjects = classRows.map((row) => subjects.get(row.payload.subjectId))
+    .filter((item) => item?.isActive);
+  const subjectSelect = document.getElementById('scheduleSubject');
+  subjectSelect.innerHTML = `<option value="">— Pilih mapel dari konfigurasi semester —</option>${
+    availableSubjects.map((subject) =>
+      `<option value="${escapeHtml(subject.id)}" ${subject.id === subjectId ? 'selected' : ''}>${escapeHtml(subject.code)} — ${escapeHtml(subject.name)}</option>`
+    ).join('')
+  }`;
+  if (![...subjectSelect.options].some((option) => option.value === subjectId)) subjectSelect.value = '';
+  configureScheduleTeachers(teacherUid);
+}
+
+function configureScheduleTeachers(selectedUid = document.getElementById('scheduleTeacher').value) {
+  const classId = document.getElementById('scheduleClass').value;
+  const subjectId = document.getElementById('scheduleSubject').value;
+  const assignments = (scheduleSetup?.records.semesterConfigurations || [])
+    .filter((row) => row.type === 'teacherAssignments' &&
+      row.payload.classId === classId && row.payload.subjectId === subjectId);
+  const users = new Map((scheduleSetup?.records.users || []).map((item) => [item.id, item]));
+  const options = assignments.map((row) => users.get(row.payload.teacherUid))
+    .filter((item) => item?.role === 'guru' && item.status === 'Aktif');
+  const select = document.getElementById('scheduleTeacher');
+  select.innerHTML = `<option value="">— Pilih guru yang ditugaskan —</option>${
+    options.map((teacher) =>
+      `<option value="${escapeHtml(teacher.id)}" ${teacher.id === selectedUid ? 'selected' : ''}>${escapeHtml(teacher.name)}</option>`
+    ).join('')
+  }`;
 }
 
 async function simpanJadwal(event) {
@@ -159,22 +219,33 @@ async function simpanJadwal(event) {
 
   const id      = document.getElementById('scheduleId').value;
   const day     = document.getElementById('scheduleDay').value;
-  const className = document.getElementById('scheduleClass').value;
+  const classId = document.getElementById('scheduleClass').value;
+  const classRecord = (scheduleSetup.records.classes || []).find((item) => item.id === classId);
   const start   = document.getElementById('scheduleStart').value;
   const end     = document.getElementById('scheduleEnd').value;
-  const subject = document.getElementById('scheduleSubject').value.trim();
-  const teacher = document.getElementById('scheduleTeacher').value.trim();
+  const subjectId = document.getElementById('scheduleSubject').value;
+  const subjectRecord = (scheduleSetup.records.subjects || []).find((item) => item.id === subjectId);
+  const teacherUid = document.getElementById('scheduleTeacher').value;
+  const teacherRecord = (scheduleSetup.records.users || []).find((item) => item.id === teacherUid);
+  const roomId = document.getElementById('scheduleRoom').value;
+  const roomRecord = (scheduleSetup.records.rooms || []).find((item) => item.id === roomId);
+  const subject = subjectRecord?.name || '';
+  const teacher = teacherRecord?.name || '';
 
   let valid = true;
   document.getElementById('errScheduleSubject').textContent = '';
   document.getElementById('errScheduleTeacher').textContent = '';
 
-  if (subject.length < 3) {
-    document.getElementById('errScheduleSubject').textContent = 'Nama mata pelajaran minimal 3 karakter.';
+  if (!subjectId) {
+    document.getElementById('errScheduleSubject').textContent = 'Pilih mata pelajaran yang telah dikonfigurasi untuk kelas ini.';
     valid = false;
   }
-  if (teacher.length < 3) {
-    document.getElementById('errScheduleTeacher').textContent = 'Nama guru minimal 3 karakter.';
+  if (!teacherUid) {
+    document.getElementById('errScheduleTeacher').textContent = 'Pilih guru yang telah ditugaskan untuk mapel ini.';
+    valid = false;
+  }
+  if (!classId || !roomId || !roomRecord) {
+    Toast.warning('Pilih kelas dan ruangan yang valid.');
     valid = false;
   }
   if (!start || !end) {
@@ -189,22 +260,38 @@ async function simpanJadwal(event) {
   const bentrok = daftarJadwal.find((jadwal) => {
     if (jadwal.id === id || jadwal.day !== day) return false;
     const waktuBertabrakan = start < jadwal.end && end > jadwal.start;
-    const kelasSama = jadwal.className === className;
-    const guruSama = jadwal.teacher.trim().toLocaleLowerCase() === teacher.toLocaleLowerCase();
-    return waktuBertabrakan && (kelasSama || guruSama);
+    const kelasSama = jadwal.classId === classId;
+    const guruSama = jadwal.teacherUid === teacherUid;
+    const ruanganSama = jadwal.roomId === roomId;
+    return waktuBertabrakan && (kelasSama || guruSama || ruanganSama);
   });
   if (bentrok) {
-    const alasan = bentrok.className === className
-      ? `Kelas ${className} sudah memiliki ${bentrok.subject}`
-      : `${teacher} sudah mengajar ${bentrok.subject} di kelas ${bentrok.className}`;
+    const alasan = bentrok.classId === classId
+      ? `Kelas ${classRecord?.name || ''} sudah memiliki ${bentrok.subject}`
+      : bentrok.teacherUid === teacherUid
+        ? `${teacher} sudah mengajar ${bentrok.subject} di kelas ${bentrok.className}`
+        : `Ruangan ${roomRecord?.name || ''} sudah digunakan`;
     Toast.warning(`${alasan} pada ${day}, ${bentrok.start}–${bentrok.end}.`);
     return;
   }
 
   try {
-    const payload = { day, className, start, end, subject, teacher };
+    const payload = {
+      classId,
+      className: classRecord.name,
+      subjectId,
+      subject,
+      teacherUid,
+      teacherName: teacher,
+      day, start, end,
+      roomId,
+      roomName: roomRecord.name
+    };
 
-    if (id) {
+    if (APP_CONFIG.BACKEND === 'firebase') {
+      await API.saveActiveSchedule(id, payload);
+      Toast.success(id ? 'Jadwal berhasil diperbarui.' : 'Jadwal baru berhasil ditambahkan.');
+    } else if (id) {
       await API.updateSchedule(id, payload);
       Toast.success('Jadwal berhasil diperbarui.');
     } else {
@@ -224,15 +311,16 @@ async function simpanJadwal(event) {
 async function hapusJadwal(id) {
   const confirmed = await confirmDialog({
     title: 'Hapus Jadwal?',
-    message: 'Jadwal mata pelajaran ini akan dihapus permanen.',
-    confirmText: 'Ya, Hapus',
+    message: 'Jadwal tanpa riwayat absensi akan dihapus. Jadwal yang memiliki riwayat terlindungi.',
+    confirmText: 'Hapus Jadwal',
     danger: true
   });
 
   if (!confirmed) return;
 
   try {
-    await API.deleteSchedule(id);
+    if (APP_CONFIG.BACKEND === 'firebase') await API.deleteActiveSchedule(id);
+    else await API.deleteSchedule(id);
     daftarJadwal = await API.getSchedules();
     renderJadwalAdmin();
     Toast.success('Jadwal berhasil dihapus.');
@@ -259,9 +347,8 @@ async function initJadwalGuru() {
 
     document.getElementById('scheduleSubtitle').textContent =
       `Jadwal mengajar ${teacher.name}${teacher.className ? ` · ${teacher.className}` : ''}.`;
-    daftarJadwal = schedules.filter((jadwal) =>
-      String(jadwal.teacher || '').trim().toLocaleLowerCase() === teacher.name.trim().toLocaleLowerCase()
-    );
+    daftarJadwal = schedules.filter((jadwal) => jadwal.teacherUid === session.id ||
+      String(jadwal.teacher || '').trim().toLocaleLowerCase() === teacher.name.trim().toLocaleLowerCase());
     setupJadwalHarian(dayFilter, () => {
       const rows = renderJadwalHarian(daftarJadwal, dayFilter.value, true);
       tbody.innerHTML = rows || emptyTableRow(4, 'Tidak ada jadwal', 'Jadwal mengajar Anda belum tersedia untuk hari yang dipilih.');

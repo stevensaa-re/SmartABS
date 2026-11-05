@@ -10,6 +10,7 @@ const SEMESTER_TYPE_LABELS = Object.fromEntries(SEMESTER_COPY_TYPES);
 let semesters = [];
 let targetConfigurations = [];
 let lastCopyPreview = null;
+let academicSetup = null;
 
 document.addEventListener('DOMContentLoaded', () => {
   if (document.body.dataset.page !== 'semesters') return;
@@ -23,6 +24,7 @@ async function initSemesterPage() {
   }
   renderCopyTypes();
   bindSemesterEvents();
+  academicSetup = await API.getSchoolSetup();
   await refreshSemesters();
 }
 
@@ -41,6 +43,11 @@ function bindSemesterEvents() {
   document.getElementById('copyConfigurationButton').addEventListener('click', copyConfiguration);
   document.getElementById('configurationTableBody').addEventListener('click', handleConfigurationAction);
   document.getElementById('configurationForm').addEventListener('submit', saveConfiguration);
+  document.getElementById('addConfigurationButton').addEventListener('click', () => openConfigurationModal());
+  document.getElementById('configurationTypeSelector').addEventListener('change', () => renderConfigurationFields());
+  document.getElementById('configurationFields').addEventListener('change', (event) => {
+    if (event.target.id === 'config-classId') updateConfigSubjectOptions();
+  });
   document.getElementById('closeConfigurationModal').addEventListener('click', closeConfigurationModal);
   document.getElementById('cancelConfigurationModal').addEventListener('click', closeConfigurationModal);
 }
@@ -288,6 +295,7 @@ async function refreshTargetConfigurations() {
   const semesterId = document.getElementById('targetSemester').value;
   const target = semesters.find((item) => item.id === semesterId);
   const tbody = document.getElementById('configurationTableBody');
+  document.getElementById('addConfigurationButton').disabled = !target || target.status !== 'Draft';
   if (!semesterId) {
     targetConfigurations = [];
     tbody.innerHTML = '<tr><td colspan="3" class="text-muted">Pilih atau buat semester Draft terlebih dahulu.</td></tr>';
@@ -355,64 +363,178 @@ async function handleConfigurationAction(event) {
   }
 }
 
-function openConfigurationModal(item) {
-  const data = item.payload || {};
-  document.getElementById('configurationId').value = item.id;
-  document.getElementById('configurationType').value = item.type;
-  document.getElementById('configurationClassId').value = data.classId || '';
-  const fields = configurationFields(item.type);
-  document.getElementById('configurationFields').innerHTML = fields.map((field) => `
-    <div class="form-group">
-      <label for="config-${field.key}">${escapeHtml(field.label)}</label>
-      ${field.options
-        ? `<select id="config-${field.key}" class="form-control" ${field.required ? 'required' : ''}>
-            ${field.options.map((option) => `<option value="${escapeHtml(option)}" ${data[field.key] === option ? 'selected' : ''}>${escapeHtml(option)}</option>`).join('')}
-          </select>`
-        : `<input id="config-${field.key}" type="${field.inputType || 'text'}" class="form-control"
-            value="${escapeHtml(data[field.key] ?? '')}" ${field.required ? 'required' : ''}
-            ${field.inputType === 'number' ? 'min="1" max="500"' : ''}>`}
-    </div>`).join('');
+function openConfigurationModal(item = null) {
+  const selector = document.getElementById('configurationTypeSelector');
+  selector.disabled = Boolean(item);
+  selector.value = item?.type || 'subjects';
+  document.getElementById('configurationId').value = item?.id || '';
+  document.getElementById('configurationType').value = item?.type || selector.value;
+  document.getElementById('configurationClassId').value = item?.payload?.classId || '';
+  document.getElementById('configurationModal').dataset.editing = String(Boolean(item));
+  document.querySelector('#configurationModal .modal-header h3').textContent =
+    item ? 'Edit Konfigurasi Draft' : 'Tambah Konfigurasi Draft';
+  renderConfigurationFields(item?.payload || {});
   openModal('configurationModal');
 }
 
-function configurationFields(type) {
-  const classField = [{ key: 'className', label: 'Kelas', required: true }];
-  const subjectField = [{ key: 'subject', label: 'Mata pelajaran', required: true }];
-  const teacherFields = [
-    { key: 'teacherName', label: 'Nama guru', required: true },
-    { key: 'teacherUid', label: 'UID akun guru', required: true }
-  ];
-  const timeFields = [
-    { key: 'day', label: 'Hari', options: ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'], required: true },
-    { key: 'start', label: 'Jam mulai', inputType: 'time', required: true },
-    { key: 'end', label: 'Jam selesai', inputType: 'time', required: true }
-  ];
-  if (type === 'subjects') return [...classField, ...subjectField];
-  if (type === 'teacherAssignments') return [...classField, ...subjectField, ...teacherFields];
-  if (type === 'schedules') return [...classField, ...subjectField, ...teacherFields, ...timeFields];
-  if (type === 'periods') return [
-    ...timeFields,
-    { key: 'label', label: 'Label (opsional)' }
-  ];
-  return [
-    ...classField,
-    { key: 'level', label: 'Tingkat' },
-    { key: 'major', label: 'Jurusan' },
-    { key: 'homeroom', label: 'Wali kelas' },
-    { key: 'capacity', label: 'Kapasitas', inputType: 'number', required: true }
-  ];
+function configOption(value, label) {
+  return { value: String(value || ''), label: String(label || '') };
+}
+
+function configurationFields(type, data = {}) {
+  const records = academicSetup?.records || {};
+  const schoolLevel = academicSetup?.school?.schoolLevel || '';
+  const classes = (records.classes || []).filter((item) => item.isActive !== false);
+  const classOptions = classes.map((item) => configOption(item.id, item.name));
+  if (data.classId && !classOptions.some((option) => option.value === data.classId)) {
+    classOptions.unshift(configOption(data.classId, `${data.className || data.classId} (relasi lama)`));
+  }
+  const selectedClass = classes.find((item) => item.id === (data.classId || document.getElementById('config-classId')?.value));
+  const subjects = (records.subjects || []).filter((item) =>
+    item.isActive !== false && (!schoolLevel || item.educationLevels?.includes(schoolLevel)));
+  const subjectOptions = subjects.map((item) => configOption(item.id, `${item.code} — ${item.name}`));
+  if (data.subjectId && !subjectOptions.some((option) => option.value === data.subjectId)) {
+    subjectOptions.unshift(configOption(data.subjectId, `${data.subject || data.subjectId} (relasi lama)`));
+  }
+  const teachers = (records.users || []).filter((item) =>
+    item.role === 'guru' && item.status === 'Aktif')
+    .map((item) => configOption(item.id, item.name));
+  if (data.teacherUid && !teachers.some((option) => option.value === data.teacherUid)) {
+    teachers.unshift(configOption(data.teacherUid, `${data.teacherName || data.teacherUid} (relasi lama)`));
+  }
+  const rooms = (records.rooms || []).filter((item) => item.isActive)
+    .map((item) => configOption(item.id, `${item.code} — ${item.name}`));
+  if (data.roomId && !rooms.some((option) => option.value === data.roomId)) {
+    rooms.unshift(configOption(data.roomId, data.roomName || data.roomId));
+  }
+  const field = (key, label, options, value, required = true) => `
+    <div class="form-group">
+      <label for="config-${key}">${escapeHtml(label)}${required ? ' *' : ''}</label>
+      <select id="config-${key}" class="form-control" ${required ? 'required' : ''}>
+        <option value="">— Pilih —</option>
+        ${options.map((option) => `<option value="${escapeHtml(option.value)}" ${option.value === String(value || '') ? 'selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}
+      </select>
+    </div>`;
+  const input = (key, label, value = '', type = 'text', required = true) => `
+    <div class="form-group">
+      <label for="config-${key}">${escapeHtml(label)}${required ? ' *' : ''}</label>
+      <input id="config-${key}" type="${type}" class="form-control" value="${escapeHtml(value)}"
+        ${required ? 'required' : ''} ${type === 'number' ? 'min="1" max="500"' : ''}>
+    </div>`;
+  const timeFields = `
+    ${field('day', 'Hari', ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'].map((day) => configOption(day, day)), data.day)}
+    ${input('start', 'Jam mulai', data.start, 'time')}
+    ${input('end', 'Jam selesai', data.end, 'time')}`;
+
+  if (type === 'periods') return `${timeFields}${input('label', 'Label (opsional)', data.label || '', 'text', false)}`;
+  if (type === 'classes') {
+    const programs = (records.programs || []).filter((item) => item.isActive)
+      .map((item) => configOption(item.id, `${item.code} — ${item.name}`));
+    const majorOptions = [configOption('', 'Tanpa jurusan'), ...programs];
+    if (data.majorId && !majorOptions.some((option) => option.value === data.majorId)) {
+      majorOptions.push(configOption(data.majorId, data.major || data.majorId));
+    }
+    return `${field('classId', 'Kelas', classOptions, data.classId)}
+      ${input('level', 'Tingkat', data.level || selectedClass?.level || '')}
+      ${schoolLevel === 'SMK' ? field('majorId', 'Program keahlian', majorOptions, data.majorId || selectedClass?.majorId, false) : ''}
+      ${field('roomId', 'Ruangan utama', [configOption('', 'Belum ditentukan'), ...rooms], data.roomId || selectedClass?.roomId, false)}
+      ${field('homeroomTeacherUid', 'Wali kelas', teachers, data.homeroomTeacherUid, false)}
+      ${input('capacity', 'Kapasitas siswa', data.capacity || selectedClass?.capacity || 36, 'number')}`;
+  }
+  const common = `${field('classId', 'Rombongan belajar', classOptions, data.classId)}
+    ${field('subjectId', 'Mata pelajaran', subjectOptions, data.subjectId)}`;
+  if (type === 'subjects') return common;
+  if (type === 'teacherAssignments') {
+    return `${common}${field('teacherUid', 'Guru', teachers, data.teacherUid)}`;
+  }
+  return `${common}
+    ${field('teacherUid', 'Guru', teachers, data.teacherUid)}
+    ${timeFields}
+    ${field('roomId', 'Ruangan', rooms, data.roomId)}`;
+}
+
+function renderConfigurationFields(data = {}) {
+  const type = document.getElementById('configurationTypeSelector').value;
+  document.getElementById('configurationType').value = type;
+  document.getElementById('configurationFields').innerHTML = configurationFields(type, data);
+}
+
+function updateConfigSubjectOptions() {
+  const subjectSelect = document.getElementById('config-subjectId');
+  if (!subjectSelect) return;
+  const currentValue = subjectSelect.value;
+  const html = configurationFields(
+    document.getElementById('configurationTypeSelector').value,
+    { classId: document.getElementById('config-classId')?.value || '' }
+  );
+  const temp = document.createElement('div');
+  temp.innerHTML = html;
+  const updated = temp.querySelector('#config-subjectId');
+  if (updated) {
+    subjectSelect.innerHTML = updated.innerHTML;
+    if ([...subjectSelect.options].some((option) => option.value === currentValue)) {
+      subjectSelect.value = currentValue;
+    }
+  }
 }
 
 async function saveConfiguration(event) {
   event.preventDefault();
-  const type = document.getElementById('configurationType').value;
-  const payload = { classId: document.getElementById('configurationClassId').value };
-  for (const field of configurationFields(type)) {
-    const input = document.getElementById(`config-${field.key}`);
-    payload[field.key] = field.inputType === 'number' ? Number(input.value) : input.value.trim();
+  const type = document.getElementById('configurationTypeSelector').value;
+  const editing = document.getElementById('configurationModal').dataset.editing === 'true';
+  const read = (key) => document.getElementById(`config-${key}`)?.value || '';
+  const classRecord = (academicSetup.records.classes || []).find((item) => item.id === read('classId'));
+  const subjectRecord = (academicSetup.records.subjects || []).find((item) => item.id === read('subjectId'));
+  const teacherRecord = (academicSetup.records.users || []).find((item) => item.id === read('teacherUid'));
+  const roomRecord = (academicSetup.records.rooms || []).find((item) => item.id === read('roomId'));
+  const payload = {};
+  if (type === 'periods') {
+    Object.assign(payload, { day: read('day'), start: read('start'), end: read('end'), label: read('label') });
+  } else if (type === 'classes') {
+    const program = (academicSetup.records.programs || []).find((item) => item.id === read('majorId'));
+    const room = (academicSetup.records.rooms || []).find((item) => item.id === read('roomId'));
+    Object.assign(payload, {
+      classId: read('classId'),
+      className: classRecord?.name || '',
+      level: read('level'),
+      majorId: read('majorId'),
+      major: program?.name || '',
+      roomId: read('roomId'),
+      roomName: room?.name || '',
+      homeroomTeacherUid: read('homeroomTeacherUid'),
+      homeroom: teacherRecord?.name || classRecord?.homeroom || '',
+      capacity: Number(read('capacity'))
+    });
+  } else {
+    Object.assign(payload, {
+      classId: read('classId'),
+      className: classRecord?.name || '',
+      subjectId: read('subjectId'),
+      subject: subjectRecord?.name || '',
+      programId: classRecord?.majorId || ''
+    });
+    if (type === 'teacherAssignments' || type === 'schedules') {
+      Object.assign(payload, {
+        teacherUid: read('teacherUid'),
+        teacherName: teacherRecord?.name || ''
+      });
+    }
+    if (type === 'schedules') {
+      Object.assign(payload, {
+        day: read('day'),
+        start: read('start'),
+        end: read('end'),
+        roomId: read('roomId'),
+        roomName: roomRecord?.name || ''
+      });
+    }
   }
   try {
-    await API.updateSemesterConfiguration(document.getElementById('configurationId').value, payload);
+    if (editing) {
+      await API.updateSemesterConfiguration(document.getElementById('configurationId').value, payload);
+    } else {
+      await API.saveSemesterConfiguration(document.getElementById('targetSemester').value, type, payload);
+    }
     closeConfigurationModal();
     await refreshTargetConfigurations();
     clearPreview();
@@ -424,6 +546,9 @@ async function saveConfiguration(event) {
 
 function closeConfigurationModal() {
   closeModal('configurationModal');
+  const modal = document.getElementById('configurationModal');
+  modal.dataset.editing = 'false';
+  document.getElementById('configurationTypeSelector').disabled = false;
 }
 
 function showSemesterMessage(message, tone) {

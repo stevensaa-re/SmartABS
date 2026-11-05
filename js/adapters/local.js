@@ -363,6 +363,13 @@ const LocalAdapter = (() => {
       return true;
     },
 
+    getSchoolSetup: semesterUnavailable,
+    saveSchoolProfile: semesterUnavailable,
+    saveAcademicMaster: semesterUnavailable,
+    saveSemesterConfiguration: semesterUnavailable,
+    saveActiveSchedule: semesterUnavailable,
+    deleteActiveSchedule: semesterUnavailable,
+
     /* ---------------- SCHEDULES ---------------- */
 
     async getSchedules() {

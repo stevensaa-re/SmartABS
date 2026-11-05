@@ -26,7 +26,7 @@
       <div class="page-head">
         <div>
           <h1>Jadwal Pelajaran</h1>
-          <p>Atur jadwal mata pelajaran per kelas.</p>
+          <p>Jadwal aktif mengikuti konfigurasi mata pelajaran, penugasan, ruangan, dan semester.</p>
         </div>
         <button class="btn btn-primary" id="btnAddSchedule">
           <i class="fa-solid fa-plus"></i> Tambah Jadwal
@@ -57,6 +57,7 @@
                 <th>Mata Pelajaran</th>
                 <th>Guru</th>
                 <th>Kelas</th>
+                <th>Ruangan</th>
                 <th class="text-right" colspan="2">Aksi</th>
               </tr>
             </thead>
@@ -89,7 +90,7 @@
             <select id="scheduleDay" class="form-control" required></select>
           </div>
           <div class="form-group">
-            <label for="scheduleClass">Kelas <span class="req">*</span></label>
+            <label for="scheduleClass">Rombongan belajar <span class="req">*</span></label>
             <select id="scheduleClass" class="form-control" required></select>
           </div>
         </div>
@@ -107,14 +108,18 @@
 
         <div class="form-group">
           <label for="scheduleSubject">Mata Pelajaran <span class="req">*</span></label>
-          <input type="text" id="scheduleSubject" class="form-control" placeholder="Contoh: Pemrograman Web" required>
+          <select id="scheduleSubject" class="form-control" required></select>
           <small class="form-error" id="errScheduleSubject"></small>
         </div>
 
         <div class="form-group">
           <label for="scheduleTeacher">Guru Pengampu <span class="req">*</span></label>
-          <input type="text" id="scheduleTeacher" class="form-control" placeholder="Nama guru" required>
+          <select id="scheduleTeacher" class="form-control" required></select>
           <small class="form-error" id="errScheduleTeacher"></small>
+        </div>
+        <div class="form-group">
+          <label for="scheduleRoom">Ruangan <span class="req">*</span></label>
+          <select id="scheduleRoom" class="form-control" required></select>
         </div>
       </div>
       <div class="modal-footer">

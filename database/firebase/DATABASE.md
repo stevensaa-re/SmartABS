@@ -16,6 +16,26 @@ maintain a separate authoritative attendance or roster database.
   the tenant key to new documents. Existing records still need a reviewed migration before
   multi-school use; see the rollout warning in `../../FIREBASE_SETUP.md`.
 
+## School profile and academic masters
+
+- `schools/{schoolId}` stores school identity (`name`, `npsn`, `logoUrl`), `schoolLevel`
+  (`SD`, `SMP`, `SMA`, or `SMK`), `schoolType`, address/contact/principal, active academic year,
+  active semester pointer, operating days/hours, IANA timezone, late tolerance, and status.
+- An active admin profile must already carry the trusted `schoolId`. `getSchoolSetup` can create
+  the initial `schools/{schoolId}` placeholder with status `Persiapan`; `saveSchoolProfile`
+  validates the profile and sets it active. This does not provision the first admin account.
+- `programs/{id}`, `academicLevels/{id}`, `rooms/{id}`, `subjects/{id}`, and `classes/{id}` are
+  school-scoped master records. IDs, not names, codes, or labels, identify relationships.
+- SMK programs are managed in `programs`; classes link with `majorId` and retain `major` as a
+  display snapshot. Class records may also link to a room and homeroom teacher UID.
+- Subjects have an admin-managed code, name, category, active flag, and supported education levels.
+  Their per-class and per-semester assignments live in `semesterConfigurations`, not in a hardcoded
+  subject list.
+- School profile, master-data writes, and schedule changes use authenticated Cloud Functions and
+  create audit entries. The Website logo upload stores images under
+  `schools/{schoolId}/logo/{fileName}`; Storage Rules restrict writes to active school admins and
+  image files up to 2 MiB.
+
 ## Semester configuration
 
 - `semesters/{semesterId}` stores school-scoped name, academic year, term, date range, status
@@ -51,8 +71,9 @@ write history so the previous attendance state remains auditable.
 
 Rules: `firestore.rules`  
 Composite indexes: `firestore.indexes.json`  
-Create the `schools/{schoolId}` record and assign the initial admin using a trusted operator
-workflow; there is no public school-bootstrap callable.
+Assign the initial admin a trusted `schoolId` using an operator workflow. The authenticated
+`getSchoolSetup` callable initializes the matching school placeholder for that pre-linked admin;
+it is not a public school-creation endpoint.
 
 `migrate-school-id.js` defaults to a read-only dry run. It scans tenant-owned collections, refuses
 conflicting assignments, and accepts an explicit school ID only when that school is active. Before

@@ -1,0 +1,34 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function userProfile() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function schoolDocument(schoolId) {
+      return firestore.get(/databases/(default)/documents/schools/$(schoolId)).data;
+    }
+
+    function activeSchoolMember(schoolId) {
+      return request.auth != null
+        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
+        && userProfile().status == 'Aktif'
+        && userProfile().schoolId == schoolId
+        && firestore.exists(/databases/(default)/documents/schools/$(schoolId))
+        && schoolDocument(schoolId).status in ['Aktif', 'Persiapan'];
+    }
+
+    function activeSchoolAdmin(schoolId) {
+      return activeSchoolMember(schoolId) && userProfile().role == 'admin';
+    }
+
+    match /schools/{schoolId}/logo/{fileName} {
+      allow read: if activeSchoolMember(schoolId);
+      allow create, update: if activeSchoolAdmin(schoolId)
+        && request.resource.size <= 2 * 1024 * 1024
+        && request.resource.contentType.matches('image/(png|jpeg|webp)');
+      allow delete: if activeSchoolAdmin(schoolId);
+    }
+  }
+}

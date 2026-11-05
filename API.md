@@ -12,6 +12,12 @@ checks active status and role. When the profile contains `schoolId`, it also req
 
 | Callable | Authorized caller | Input | Result / behavior |
 |---|---|---|---|
+| `getSchoolSetup` | Active school admin | none | Returns the admin's school profile and school-scoped academic, user, semester, and schedule records; creates a `Persiapan` placeholder school document if missing |
+| `getSchoolSummary` | Active school user | none | Returns a safe school-profile summary and the school's validated active-semester summary for role dashboards and read-only information screens |
+| `saveSchoolProfile` | Active school admin | school profile fields | Validates and saves school identity, level/type, contact, active academic year, operating hours, timezone, and late tolerance; activates the prepared school and audits the change |
+| `saveAcademicMaster` | Active school admin | `type`, optional `recordId`, `payload` | Creates or updates one school-scoped program, academic level, room, subject, or class; validates references and duplicate codes/names and writes an audit entry |
+| `saveActiveSchedule` | Active school admin | optional `scheduleId`, schedule `payload` | Creates or updates a schedule in the school's active semester after validating class, subject, teacher assignment, room, and conflicts |
+| `deleteActiveSchedule` | Active school admin | `scheduleId` | Deletes a schedule from the active semester only when it has no attendance history or active QR session |
 | `createUser` | Admin | `name`, `username`, `email`, `password`, `role`, `status` | Creates an Auth identity and matching `users/{uid}` profile |
 | `createTeacherAccount` | Admin | `account`, `teacher` | Creates Auth identity, user profile, teacher profile, and audit entry |
 | `createStudentAccount` | Admin | `account`, `student` | Creates Auth identity, user profile, student profile, and audit entry |
@@ -32,6 +38,21 @@ Successful responses contain JSON-safe values only. Errors use callable error co
 `unauthenticated`, `permission-denied`, `invalid-argument`, `not-found`, and
 `failed-precondition`. Firebase Rules separately reject direct client writes to QR session
 documents and QR attendance records.
+
+## School setup and academic master data
+
+The Website admin setup page stores the school profile in `schools/{schoolId}` and uses Cloud
+Functions for profile and master-data writes. A pre-linked active admin can initialize a missing
+school document in `Persiapan` state, then save a validated profile to activate the school. The
+admin account itself must already have a trusted `schoolId`; this flow does not create the initial
+administrator or school identity.
+
+`saveAcademicMaster` accepts `programs`, `academicLevels`, `rooms`, `subjects`, or `classes`.
+Document IDs are the relationship keys; display names and codes are not primary keys. SMK
+programs are only accepted for an SMK school, class major/room/homeroom references are validated,
+and subjects must support the school's education level. The Website supports a CSV subject
+preview/import/export flow. CSV writes are per row rather than atomic; the UI reports partial
+success so a failed import can be corrected and retried.
 
 ## Semester preparation
 

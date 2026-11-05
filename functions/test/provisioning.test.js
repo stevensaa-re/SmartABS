@@ -17,14 +17,17 @@ test('Firebase callables provision accounts and enforce QR attendance atomically
 }, async () => {
   const admin = await createIdentity('admin');
   const teacher = await createIdentity('teacher');
+  const unassignedTeacher = await createIdentity('unassigned-teacher');
   const student = await createIdentity('student');
+  const otherClassStudent = await createIdentity('other-class-student');
   const crossSchoolStudent = await createIdentity('cross-school-student');
 
   const seed = await commit([
     write('schools/school-a', {
       name: string('School A'),
       status: string('Aktif'),
-      timeZone: string('Asia/Jakarta')
+      timeZone: string('Asia/Jakarta'),
+      activeSemesterId: string('semester-a')
     }),
     write('schools/school-b', {
       name: string('School B'),
@@ -48,6 +51,14 @@ test('Firebase callables provision accounts and enforce QR attendance atomically
       className: string('Class One'),
       schoolId: string('school-a')
     }),
+    write(`users/${unassignedTeacher.uid}`, {
+      name: string('Unassigned Teacher'),
+      username: string('unassigned-teacher'),
+      usernameLower: string('unassigned-teacher'),
+      role: string('guru'),
+      status: string('Aktif'),
+      schoolId: string('school-a')
+    }),
     write(`users/${student.uid}`, {
       name: string('Student A'),
       username: string('student-a'),
@@ -66,8 +77,22 @@ test('Firebase callables provision accounts and enforce QR attendance atomically
       nis: string('NIS-2'),
       schoolId: string('school-b')
     }),
+    write(`users/${otherClassStudent.uid}`, {
+      name: string('Student Other Class'),
+      username: string('student-other-class'),
+      usernameLower: string('student-other-class'),
+      role: string('siswa'),
+      status: string('Aktif'),
+      nis: string('NIS-3'),
+      schoolId: string('school-a')
+    }),
     write('classes/class-one', {
       name: string('Class One'),
+      schoolId: string('school-a')
+    }),
+    write('semesters/semester-a', {
+      name: string('Semester Aktif'),
+      status: string('Aktif'),
       schoolId: string('school-a')
     }),
     write('students/NIS-1', {
@@ -84,11 +109,19 @@ test('Firebase callables provision accounts and enforce QR attendance atomically
       status: string('Aktif'),
       schoolId: string('school-b')
     }),
+    write('students/NIS-3', {
+      nis: string('NIS-3'),
+      name: string('Student Other Class'),
+      className: string('Class Two'),
+      status: string('Aktif'),
+      schoolId: string('school-a')
+    }),
     write('schedules/schedule-a', {
       teacherUid: string(teacher.uid),
       teacher: string('Teacher A'),
       className: string('Class One'),
       subject: string('Mathematics'),
+      semesterId: string('semester-a'),
       schoolId: string('school-a')
     })
   ]);
@@ -128,6 +161,17 @@ test('Firebase callables provision accounts and enforce QR attendance atomically
   assert.equal(studentResult.status, 200, studentResult.body);
   assert.equal(studentResult.data.student.userId, studentResult.data.user.id);
 
+  const duplicateEmail = await callFunction('createStudentAccount', {
+    account: {
+      name: 'Duplicate Email',
+      username: 'duplicate-email',
+      email: 'new-teacher@example.test',
+      password: 'secure-password'
+    },
+    student: { nis: '12346', className: 'Class One', gender: 'P', status: 'Aktif' }
+  }, admin.token);
+  assert.notEqual(duplicateEmail.status, 200);
+
   const dateParts = Object.fromEntries(new Intl.DateTimeFormat('en', {
     timeZone: 'Asia/Jakarta',
     year: 'numeric',
@@ -143,6 +187,12 @@ test('Firebase callables provision accounts and enforce QR attendance atomically
   const session = sessionResult.data;
   assert.match(session.token, /^[a-f0-9]{32}$/);
 
+  const unassignedSession = await callFunction('startAttendanceSession', {
+    scheduleId: 'schedule-a',
+    date
+  }, unassignedTeacher.token);
+  assert.notEqual(unassignedSession.status, 200);
+
   const [firstScan, replayedScan] = await Promise.all([
     callFunction('submitQrAttendance', { sessionId: session.id, token: session.token }, student.token),
     callFunction('submitQrAttendance', { sessionId: session.id, token: session.token }, student.token)
@@ -155,6 +205,11 @@ test('Firebase callables provision accounts and enforce QR attendance atomically
     token: session.token
   }, crossSchoolStudent.token);
   assert.notEqual(crossSchoolScan.status, 200);
+  const wrongClassScan = await callFunction('submitQrAttendance', {
+    sessionId: session.id,
+    token: session.token
+  }, otherClassStudent.token);
+  assert.notEqual(wrongClassScan.status, 200);
 
   const closeResult = await callFunction('closeAttendanceSession', { sessionId: session.id }, teacher.token);
   assert.equal(closeResult.status, 200, closeResult.body);
@@ -163,6 +218,23 @@ test('Firebase callables provision accounts and enforce QR attendance atomically
     token: session.token
   }, student.token);
   assert.notEqual(closedScan.status, 200);
+
+  const expiredSessionResult = await callFunction('startAttendanceSession', {
+    scheduleId: 'schedule-a',
+    date
+  }, teacher.token);
+  assert.equal(expiredSessionResult.status, 200, expiredSessionResult.body);
+  const expiredSession = expiredSessionResult.data;
+  const expirationUpdate = await commit([updateWrite(
+    `attendanceSessions/${expiredSession.id}`,
+    { expiresAt: { timestampValue: new Date(Date.now() - 60_000).toISOString() } }
+  )]);
+  assert.equal(expirationUpdate.status, 200, expirationUpdate.body);
+  const expiredScan = await callFunction('submitQrAttendance', {
+    sessionId: expiredSession.id,
+    token: expiredSession.token
+  }, student.token);
+  assert.notEqual(expiredScan.status, 200);
 });
 
 async function createIdentity(name) {
@@ -209,6 +281,13 @@ function write(path, fields) {
   return {
     update: { name: `${documentPrefix}/${path}`, fields },
     currentDocument: { exists: false }
+  };
+}
+
+function updateWrite(path, fields) {
+  return {
+    update: { name: `${documentPrefix}/${path}`, fields },
+    updateMask: { fieldPaths: Object.keys(fields) }
   };
 }
 

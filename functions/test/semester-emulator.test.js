@@ -22,6 +22,7 @@ test('semester lifecycle is tenant-scoped, idempotent, editable, and excludes at
       name: string('School A'),
       status: string('Aktif'),
       timeZone: string('Asia/Jakarta'),
+      schoolLevel: string('SMA'),
       activeSemesterId: string('semester-source-a')
     }),
     write('schools/semester-school-b', {
@@ -51,6 +52,20 @@ test('semester lifecycle is tenant-scoped, idempotent, editable, and excludes at
       level: string('10'),
       major: string('IPA'),
       capacity: integer(30),
+      schoolLevel: string('SMA'),
+      schoolId: string('semester-school-a')
+    }),
+    write('subjects/subject-math', {
+      code: string('MTK'),
+      name: string('Matematika'),
+      isActive: { booleanValue: true },
+      educationLevels: { arrayValue: { values: [string('SMA')] } },
+      schoolId: string('semester-school-a')
+    }),
+    write('rooms/room-one', {
+      code: string('R-01'),
+      name: string('Ruang 01'),
+      isActive: { booleanValue: true },
       schoolId: string('semester-school-a')
     }),
     write('semesters/semester-source-a', {
@@ -189,6 +204,18 @@ test('semester lifecycle is tenant-scoped, idempotent, editable, and excludes at
   }, admin.token);
   assert.equal(deleted.status, 200, deleted.body);
   assert.equal(deleted.data.deleted, true);
+  const restoredSubject = await callFunction('saveSemesterConfiguration', {
+    semesterId: targetId,
+    type: 'subjects',
+    payload: {
+      classId: 'semester-class-a',
+      className: '10-A',
+      subjectId: 'subject-math',
+      subject: 'Matematika',
+      programId: ''
+    }
+  }, admin.token);
+  assert.equal(restoredSubject.status, 200, restoredSubject.body);
 
   const activated = await callFunction('activateSemester', { semesterId: targetId }, admin.token);
   assert.equal(activated.status, 200, activated.body);
@@ -247,16 +274,20 @@ const documentPath = `projects/${projectId}/databases/(default)/documents`;
 function sourceConfigurations() {
   const rows = [
     ['source-subject', 'subjects', {
-      classId: 'semester-class-a', className: '10-A', subject: 'Matematika'
+      classId: 'semester-class-a', className: '10-A',
+      subjectId: 'subject-math', subject: 'Matematika'
     }],
     ['source-assignment', 'teacherAssignments', {
-      classId: 'semester-class-a', className: '10-A', subject: 'Matematika',
+      classId: 'semester-class-a', className: '10-A',
+      subjectId: 'subject-math', subject: 'Matematika',
       teacherUid: 'semester-teacher-a', teacherName: 'Teacher A'
     }],
     ['source-schedule', 'schedules', {
-      classId: 'semester-class-a', className: '10-A', subject: 'Matematika',
+      classId: 'semester-class-a', className: '10-A',
+      subjectId: 'subject-math', subject: 'Matematika',
       teacherUid: 'semester-teacher-a', teacherName: 'Teacher A',
-      day: 'Senin', start: '08:00', end: '09:00'
+      day: 'Senin', start: '08:00', end: '09:00',
+      roomId: 'room-one', roomName: 'Ruang 01'
     }],
     ['source-period', 'periods', {
       day: 'Senin', start: '08:00', end: '09:00', label: 'Jam 1'

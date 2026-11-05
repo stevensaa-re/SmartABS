@@ -24,6 +24,7 @@ const FirebaseAdapter = (() => {
 
   let db = null;
   let auth = null;
+  let storage = null;
   let functionsApi = null;
   let initPromise = null;
   let activeSchoolId = null;
@@ -61,12 +62,14 @@ const FirebaseAdapter = (() => {
       await Promise.all([
         loadScript(`${SDK_BASE}firebase-auth-compat.js`),
         loadScript(`${SDK_BASE}firebase-firestore-compat.js`),
-        loadScript(`${SDK_BASE}firebase-functions-compat.js`)
+        loadScript(`${SDK_BASE}firebase-functions-compat.js`),
+        loadScript(`${SDK_BASE}firebase-storage-compat.js`)
       ]);
 
       if (!firebase.apps.length) firebase.initializeApp(APP_CONFIG.FIREBASE);
       auth = firebase.auth();
       db = firebase.firestore();
+      storage = firebase.storage();
       functionsApi = firebase.app().functions(APP_CONFIG.FIREBASE_FUNCTIONS_REGION);
       activeSchoolId = String(Session.get()?.schoolId || '');
 
@@ -161,6 +164,20 @@ const FirebaseAdapter = (() => {
     return result.id || '';
   }
 
+  async function provisionAccount(callable, payload) {
+    const result = await callFunction(callable, payload);
+    try {
+      await auth.sendPasswordResetEmail(payload.account.email);
+      return { ...result, invitationSent: true };
+    } catch (error) {
+      return {
+        ...result,
+        invitationSent: false,
+        invitationError: `Akun berhasil dibuat, tetapi email pengaturan password gagal dikirim: ${error.message || 'kesalahan tidak diketahui'}. Gunakan fitur reset password untuk mengirim ulang.`
+      };
+    }
+  }
+
   async function writeAudit(entry) {
     const firebaseUser = auth.currentUser;
     if (!firebaseUser) throw new Error('Sesi Firebase berakhir. Silakan login kembali.');
@@ -223,6 +240,23 @@ const FirebaseAdapter = (() => {
     return normalized;
   }
 
+  async function requireClassRecord(classId, className) {
+    let ref = classId ? col('classes').doc(String(classId)) : null;
+    let snap = ref ? await ref.get() : null;
+    if (!snap || !snap.exists) {
+      const normalized = String(className || '').trim();
+      if (!normalized) throw new Error('Pilih kelas terlebih dahulu.');
+      const matches = await col('classes').where('name', '==', normalized).limit(2).get();
+      if (matches.size !== 1) throw new Error('Kelas tidak ditemukan atau nama kelas tidak unik.');
+      snap = matches.docs[0];
+    }
+    if (snap.data().isActive === false) throw new Error('Kelas tidak aktif.');
+    if (className && snap.get('name') !== String(className).trim()) {
+      throw new Error('Nama kelas berubah. Muat ulang data sebelum menyimpan.');
+    }
+    return { id: snap.id, name: String(snap.get('name') || '') };
+  }
+
   async function assignedClassName() {
     const session = Session.get();
     if (!session || !['guru', 'siswa'].includes(session.role)) return '';
@@ -266,6 +300,19 @@ const FirebaseAdapter = (() => {
   return {
 
     name: 'firebase',
+
+    uploadSchoolLogo: (file) => run(async () => {
+      const schoolId = currentSchoolId();
+      if (!schoolId) throw new Error('Akun admin belum terhubung dengan sekolah.');
+      if (!APP_CONFIG.FIREBASE.storageBucket) throw new Error('Konfigurasi Firebase Storage (storageBucket) belum tersedia.');
+      const extension = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' }[file?.type];
+      if (!extension || !file || file.size > 2 * 1024 * 1024) {
+        throw new Error('Logo harus berupa PNG, JPEG, atau WebP maksimal 2 MB.');
+      }
+      const path = `schools/${schoolId}/logo/${Date.now()}.${extension}`;
+      const upload = await storage.ref(path).put(file, { contentType: file.type });
+      return upload.ref.getDownloadURL();
+    }),
 
     /* ---------------- AUTH ---------------- */
 
@@ -327,8 +374,8 @@ const FirebaseAdapter = (() => {
     getUsers: () => run(async () => fromSnap(await col('users').get())),
 
     createUser: (payload) => run(() => callFunction('createUser', payload)),
-    createTeacherAccount: (payload) => run(() => callFunction('createTeacherAccount', payload)),
-    createStudentAccount: (payload) => run(() => callFunction('createStudentAccount', payload)),
+    createTeacherAccount: (payload) => run(() => provisionAccount('createTeacherAccount', payload)),
+    createStudentAccount: (payload) => run(() => provisionAccount('createStudentAccount', payload)),
 
     updateUser: (id, payload) => run(async () => {
       const ref = col('users').doc(id);
@@ -501,7 +548,7 @@ const FirebaseAdapter = (() => {
 
     createStudent: (payload) => run(async () => {
       const nis = String(payload.nis);
-      const className = await requireClass(payload.className);
+      const classRecord = await requireClassRecord(payload.classId, payload.className);
       const ref = col('students').doc(nis);
 
       if ((await ref.get()).exists) throw new Error('NIS sudah terdaftar.');
@@ -516,7 +563,11 @@ const FirebaseAdapter = (() => {
       }
 
       const { nis: _ignore, ...rest } = payload;
-      const data = { userId: '', phone: '', gender: 'L', status: 'Aktif', ...rest, className };
+      const data = {
+        userId: '', phone: '', gender: 'L', status: 'Aktif', ...rest,
+        classId: classRecord.id,
+        className: classRecord.name
+      };
       const batch = db.batch();
       batch.set(ref, data);
       if (userRef) batch.update(userRef, { nis });
@@ -534,7 +585,11 @@ const FirebaseAdapter = (() => {
 
       const current = snap.data();
       const { nis: _ignore, ...rest } = payload;
-      if (rest.className !== undefined) rest.className = await requireClass(rest.className);
+      if (rest.className !== undefined || rest.classId !== undefined) {
+        const classRecord = await requireClassRecord(rest.classId || current.classId, rest.className || current.className);
+        rest.classId = classRecord.id;
+        rest.className = classRecord.name;
+      }
 
       if (rest.userId && rest.userId !== current.userId) {
         const linked = await col('students').where('userId', '==', rest.userId).limit(1).get();
@@ -589,64 +644,41 @@ const FirebaseAdapter = (() => {
       return fromSnap(await ref.get());
     }),
 
-    createClass: (payload) => run(async () => {
-      const exists = await col('classes').where('name', '==', payload.name).limit(1).get();
-      if (!exists.empty) throw new Error('Nama kelas sudah digunakan.');
-
-      const data = { capacity: 36, homeroom: '', ...payload };
-      const ref = await col('classes').add(data);
-      await writeAudit({ action: 'create', entity: 'class', entityId: ref.id,
-        summary: `Membuat kelas ${data.name}.` });
-      return { id: ref.id, ...data };
-    }),
+    createClass: (payload) => run(() =>
+      callFunction('saveAcademicMaster', { type: 'classes', recordId: '', payload })),
 
     updateClass: (id, payload) => run(async () => {
       const ref = col('classes').doc(id);
       const snap = await ref.get();
       if (!snap.exists) throw new Error('Kelas tidak ditemukan.');
-
-      const oldName = snap.data().name;
-
-      if (payload.name && payload.name !== oldName) {
-        const dup = await col('classes').where('name', '==', payload.name).limit(1).get();
-        if (!dup.empty) throw new Error('Nama kelas sudah digunakan.');
-
-        /* Nama kelas disalin ke banyak dokumen di Firestore, jadi rename
-           dibatasi untuk kelas yang belum dipakai. */
-        const [students, schedules, teachers] = await Promise.all([
-          col('students').where('className', '==', oldName).limit(1).get(),
-          col('schedules').where('className', '==', oldName).limit(1).get(),
-          col('teachers').where('className', '==', oldName).limit(1).get()
-        ]);
-        if (!students.empty || !schedules.empty || !teachers.empty) {
-          throw new Error('Nama kelas tidak dapat diubah karena sudah dipakai siswa/jadwal/guru. Buat kelas baru lalu pindahkan datanya.');
-        }
-      }
-
-      await ref.update(payload);
-      await writeAudit({ action: 'update', entity: 'class', entityId: id,
-        summary: `Memperbarui kelas ${payload.name || oldName}.` });
-      return fromDoc(await ref.get());
+      return callFunction('saveAcademicMaster', {
+        type: 'classes',
+        recordId: id,
+        payload: { ...snap.data(), ...payload }
+      });
     }),
-
     deleteClass: (id) => run(async () => {
       const ref = col('classes').doc(id);
       const snap = await ref.get();
       if (!snap.exists) return true;
-
-      const name = snap.data().name;
-      const students = await col('students').where('className', '==', name).limit(1).get();
-      if (!students.empty) throw new Error('Kelas masih memiliki siswa. Pindahkan siswa terlebih dahulu.');
-
-      const schedules = await col('schedules').where('className', '==', name).get();
-      const ops = [(batch) => batch.delete(ref)];
-      schedules.docs.forEach((doc) => ops.push((batch) => batch.delete(doc.ref)));
-
-      await commitInChunks(ops);
-      await writeAudit({ action: 'delete', entity: 'class', entityId: id,
-        summary: `Menghapus kelas ${name}.` });
+      await callFunction('saveAcademicMaster', {
+        type: 'classes',
+        recordId: id,
+        payload: { ...snap.data(), isActive: false }
+      });
       return true;
     }),
+
+    getSchoolSetup: () => run(() => callFunction('getSchoolSetup', {})),
+    saveSchoolProfile: (payload) => run(() => callFunction('saveSchoolProfile', payload)),
+    saveAcademicMaster: (type, recordId, payload) =>
+      run(() => callFunction('saveAcademicMaster', { type, recordId, payload })),
+    saveSemesterConfiguration: (semesterId, type, payload) =>
+      run(() => callFunction('saveSemesterConfiguration', { semesterId, type, payload })),
+    saveActiveSchedule: (scheduleId, payload) =>
+      run(() => callFunction('saveActiveSchedule', { scheduleId, payload })),
+    deleteActiveSchedule: (scheduleId) =>
+      run(() => callFunction('deleteActiveSchedule', { scheduleId })),
 
     /* ---------------- SEMESTER ---------------- */
 

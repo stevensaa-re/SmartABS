@@ -19,6 +19,9 @@ tersedia di bawah tidak boleh dianggap sudah siap dipakai.
 - Kalender akademik untuk kegiatan dan hari libur, tersedia pada website dan Android.
 - Dashboard pemantauan wali kelas untuk tren terlambat dan alpa tujuh hari terakhir.
 - Impor roster siswa/guru melalui CSV dengan pratinjau, validasi kelas, dan deteksi duplikat.
+- Setup sekolah admin untuk profil, logo, operasional sekolah, program SMK, tingkat, ruangan,
+  rombongan belajar, dan katalog mapel dinamis; CSV mapel mendukung preview, validasi, impor,
+  dan ekspor.
 - Persiapan semester admin: snapshot konfigurasi, preview dan salin mata pelajaran, penugasan,
   jadwal, jam pelajaran, dan konfigurasi kelas sebelum aktivasi.
 - Backup JSON dan pemulihan merge tanpa menimpa dokumen yang sudah ada; log audit aktivitas
@@ -31,8 +34,8 @@ tersedia di bawah tidak boleh dianggap sudah siap dipakai.
 MySQL dan `localStorage` masih tersedia sebagai kode/demo legacy, tetapi bukan backend produksi,
 bukan sumber data Android/Desktop, dan tidak menyediakan sinkronisasi lintas platform. Firebase
 adalah satu-satunya sumber data yang didukung untuk penggunaan bersama.
-Notifikasi push, unggahan Storage, dan integrasi tenant Android/migrasi data multi-sekolah belum
-selesai; lihat
+Notifikasi push dan migrasi data tenant historis belum selesai. Upload logo tersedia di Website,
+tetapi Storage Rules dan upload belum diuji di emulator. Lihat
 [FIREBASE_SETUP.md](./FIREBASE_SETUP.md) dan [REBUILD_PROGRESS.md](../REBUILD_PROGRESS.md).
 
 ## Menjalankan website

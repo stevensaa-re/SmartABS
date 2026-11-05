@@ -21,11 +21,15 @@ function stableKey(value) {
 function relationKey(type, payload) {
   switch (type) {
     case 'subjects':
-      return stableKey([payload.classId || payload.className, payload.subject]);
+      return stableKey([
+        payload.classId || payload.className,
+        payload.programId || '',
+        payload.subjectId || payload.subject
+      ]);
     case 'teacherAssignments':
       return stableKey([
         payload.classId || payload.className,
-        payload.subject,
+        payload.subjectId || payload.subject,
         payload.teacherUid || String(payload.teacherName || '').trim().toLowerCase()
       ]);
     case 'schedules':
@@ -34,7 +38,7 @@ function relationKey(type, payload) {
         payload.day,
         payload.start,
         payload.end,
-        payload.subject,
+        payload.subjectId || payload.subject,
         payload.teacherUid || String(payload.teacherName || '').trim().toLowerCase()
       ]);
     case 'periods':
@@ -55,6 +59,9 @@ function scheduleConflict(first, second) {
   if ((first.classId || first.className) === (second.classId || second.className)) {
     return `Jadwal kelas ${first.className} bertabrakan pada ${first.day} ${first.start}-${first.end}.`;
   }
+  if (first.roomId && first.roomId === second.roomId) {
+    return `Ruangan ${first.roomName || first.roomId} bertabrakan pada ${first.day} ${first.start}-${first.end}.`;
+  }
   if (first.teacherUid && first.teacherUid === second.teacherUid) {
     return `Penugasan guru ${first.teacherName || first.teacherUid} bertabrakan pada ${first.day} ${first.start}-${first.end}.`;
   }
@@ -68,7 +75,7 @@ function scheduleConflict(first, second) {
 
 function assignmentConflict(first, second) {
   if ((first.classId || first.className) !== (second.classId || second.className) ||
-      first.subject !== second.subject) return '';
+      (first.subjectId || first.subject) !== (second.subjectId || second.subject)) return '';
   const firstTeacher = first.teacherUid || String(first.teacherName || '').trim().toLowerCase();
   const secondTeacher = second.teacherUid || String(second.teacherName || '').trim().toLowerCase();
   return firstTeacher !== secondTeacher
@@ -90,6 +97,7 @@ function planConfigurationCopy(sourceRows, existingRows, selectedTypes) {
   for (const type of CONFIGURATION_TYPES) {
     for (const row of existingByType.get(type)) {
       existingKeys.get(type).add(row.relationKey || relationKey(type, row.payload));
+      if (row.sourceRelationKey) existingKeys.get(type).add(row.sourceRelationKey);
     }
   }
 

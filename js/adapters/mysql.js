@@ -123,6 +123,13 @@ const MysqlAdapter = (() => {
     updateClass: (id, payload) => put(`/classes/${enc(id)}`, payload),
     deleteClass: (id)          => del(`/classes/${enc(id)}`).then(() => true),
 
+    getSchoolSetup: semesterUnavailable,
+    saveSchoolProfile: semesterUnavailable,
+    saveAcademicMaster: semesterUnavailable,
+    saveSemesterConfiguration: semesterUnavailable,
+    saveActiveSchedule: semesterUnavailable,
+    deleteActiveSchedule: semesterUnavailable,
+
     /* ---------------- SCHEDULES ---------------- */
 
     getSchedules:   ()            => get('/schedules'),

@@ -23,6 +23,9 @@ const API_CONTRACT = [
   'getStudents', 'getStudentByNis', 'getStudentByUserId', 'createStudent', 'updateStudent', 'deleteStudent',
   /* classes */
   'getClasses', 'createClass', 'updateClass', 'deleteClass',
+  /* school and academic setup (Firebase-only) */
+  'getSchoolSetup', 'saveSchoolProfile', 'saveAcademicMaster', 'saveSemesterConfiguration',
+  'saveActiveSchedule', 'deleteActiveSchedule',
   /* schedules */
   'getSchedules', 'createSchedule', 'updateSchedule', 'deleteSchedule',
   /* semester preparation */

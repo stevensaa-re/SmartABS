@@ -24,7 +24,7 @@ test('account validation normalizes login identifiers and rejects weak inputs', 
   assert.throws(() => validateAccount({ name: 'Valid Name', username: 'user.1', email: 'a@b.test', password: 'secret1' }, 'superadmin'));
 });
 
-test('student and teacher profiles require valid class assignments and status', () => {
+test('students require a class while teacher profiles may be unassigned before semester placement', () => {
   assert.deepEqual(validateStudent({ nis: '1234', className: 'X-1' }), {
     nis: '1234',
     className: 'X-1',
@@ -34,6 +34,11 @@ test('student and teacher profiles require valid class assignments and status', 
   });
   assert.throws(() => validateStudent({ nis: '12', className: 'X-1' }));
   assert.throws(() => validateTeacher({ className: 'X-1', status: 'Deleted' }));
+  assert.deepEqual(validateTeacher({ status: 'Aktif' }), {
+    className: '',
+    status: 'Aktif',
+    subject: ''
+  });
 });
 
 test('school identity matching fails closed across tenant boundaries', () => {

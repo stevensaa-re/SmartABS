@@ -13,6 +13,7 @@ const MENUS = {
     { key: 'students',      label: 'Data Siswa',     icon: 'fa-user-graduate',      href: 'students.html' },
     { key: 'teachers',      label: 'Data Guru',      icon: 'fa-chalkboard-user',    href: 'teachers.html' },
     { key: 'classes',       label: 'Data Kelas',     icon: 'fa-school',             href: 'classes.html' },
+    { key: 'school',        label: 'Setup Sekolah',  icon: 'fa-building',           href: 'school.html' },
     { key: 'schedule',      label: 'Jadwal',         icon: 'fa-calendar-days',      href: 'schedule.html' },
     { key: 'semesters',     label: 'Persiapan Semester', icon: 'fa-copy',             href: 'semesters.html' },
     { key: 'calendar',      label: 'Kalender Akademik', icon: 'fa-calendar-check',  href: 'calendar.html' },

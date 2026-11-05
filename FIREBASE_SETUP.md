@@ -22,10 +22,11 @@ website, Android, and desktop clients. Do not configure a second database for an
    repository change does not deploy to a Firebase project.
 
 Callable Functions are in `functions/index.js` and use `asia-southeast1`. Account provisioning,
-QR session creation/rotation/closure, QR attendance check-in, and semester preparation/activation
-must go through these callables. Clients obtain the current semester ID through
-`getActiveSemester`; they do not need broad read access to school or semester documents to filter
-their schedules.
+QR session creation/rotation/closure, QR attendance check-in, school profile/master-data writes,
+active schedule changes, and semester preparation/activation must go through these callables.
+Clients obtain the current semester ID through `getActiveSemester` and a safe school/semester
+summary through `getSchoolSummary`; they do not need broad read access to school or semester
+documents for normal displays.
 Admin SDK writes bypass Firestore Rules, so each callable must authenticate, authorize, validate
 tenant relationships, and validate input itself.
 
@@ -33,11 +34,15 @@ tenant relationships, and validate input itself.
 
 | Collection | Main key / fields | Purpose |
 |---|---|---|
-| `schools/{schoolId}` | `name`, `status`, `timeZone` | Tenant metadata; active tenant is checked by sensitive callables |
+| `schools/{schoolId}` | `name`, `npsn`, `logoUrl`, `schoolLevel`, `schoolType`, operating hours/days, `timeZone`, `lateToleranceMinutes`, `activeSemesterId`, `status` | School profile and operational configuration |
 | `users/{uid}` | `role`, `status`, `schoolId`, `nis`, `className` | Authenticated account profile and role |
 | `students/{nis}` | `nis`, `userId`, `className`, `schoolId` | Student academic profile |
 | `teachers/{id}` | `username`, `className`, `subject`, `schoolId` | Teacher profile |
-| `classes/{id}` | `name`, `schoolId` | Class roster grouping |
+| `programs/{id}` | `code`, `name`, `level`, `isActive`, `schoolId` | Admin-managed SMK program/major catalog |
+| `academicLevels/{id}` | `code`, `name`, `level`, `sortOrder`, `isActive`, `schoolId` | Configurable grade-level catalog |
+| `rooms/{id}` | `code`, `name`, `capacity`, `isActive`, `schoolId` | School room catalog |
+| `subjects/{id}` | `code`, `name`, `category`, `educationLevels`, `isActive`, `schoolId` | Dynamic subject catalog |
+| `classes/{id}` | `name`, `level`, `majorId`, `roomId`, `homeroomTeacherUid`, `schoolId` | Class/rombel and roster grouping |
 | `schedules/{id}` | `teacherUid`, `className`, `subject`, `schoolId` | Lesson assignment |
 | `attendance/{id}` | `studentId`, `scheduleId`, `sessionId`, `status`, `source`, `schoolId` | Attendance result |
 | `attendanceSessions/{id}` | `scheduleId`, `date`, `token`, `expiresAt`, `active`, `schoolId` | Short-lived QR session |
@@ -75,14 +80,19 @@ are documented in [DATABASE.md](./database/firebase/DATABASE.md). It does not cr
 an independently verified Firestore export is still required before applying it.
 
 For a tenant-bound admin profile, `schools/{schoolId}` must exist with `status: "Aktif"` and a
-valid IANA `timeZone` (for example `Asia/Jakarta`). School provisioning is an operator/bootstrap
-task; there is not yet a self-service school creation workflow.
+valid IANA `timeZone` (for example `Asia/Jakarta`) for regular use. A trusted operator must first
+assign `schoolId` to the initial admin profile; the authenticated `getSchoolSetup` callable can
+then initialize a `Persiapan` school placeholder for that admin, and `saveSchoolProfile` completes
+the profile. This is not a public endpoint for creating arbitrary schools or admin accounts.
 
 ## Other Firebase services
 
-Firebase Storage upload rules and client upload flows are not yet implemented. FCM push delivery
-is also deferred; do not treat notification delivery as available. Neither feature should use
-private service-account material in a client.
+Website school-logo upload uses Firebase Storage at
+`schools/{schoolId}/logo/{fileName}`. `database/firebase/storage.rules` limits reads to school
+members and writes/deletes to school admins; uploaded images are restricted to PNG, JPEG, or WebP
+and 2 MiB. The Storage Emulator test is still outstanding. FCM push delivery is deferred; do not
+treat notification delivery as available. Neither feature should use private service-account
+material in a client.
 
 ## Local emulator checks
 
@@ -93,9 +103,9 @@ firebase emulators:exec --only auth,firestore,functions --project demo-smartabs-
   "FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FUNCTIONS_EMULATOR_HOST=127.0.0.1:5001 npm --prefix functions test"
 ```
 
-The Functions suite includes a semester lifecycle scenario covering tenant isolation, preview,
-conflict rejection, idempotent retry, Draft edits, activation, current-configuration snapshotting,
-and exclusion of attendance/QR data.
+The Functions suite includes school setup/master-data coverage as well as a semester lifecycle
+scenario covering tenant isolation, preview, conflict rejection, idempotent retry, Draft edits,
+activation, current-configuration snapshotting, and exclusion of attendance/QR data.
 
 Run Firestore Rules tests separately:
 

@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   daftarKelasGuru = classes;
 
   document.getElementById('teacherClass').innerHTML =
-    '<option value="">— Pilih kelas —</option>' +
+    '<option value="">— Belum ditentukan —</option>' +
     classes.map((kelas) => `<option value="${escapeHtml(kelas.name)}">${escapeHtml(kelas.name)}</option>`).join('');
   document.getElementById('teacherClassHint').textContent = classes.length
     ? ''
@@ -37,10 +37,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('searchTeacher').addEventListener('input', debounce(renderGuru));
   document.getElementById('filterTeacherStatus').addEventListener('change', renderGuru);
   document.getElementById('btnAddTeacher').addEventListener('click', () => {
-    if (!daftarKelasGuru.length) {
-      Toast.warning('Buat kelas terlebih dahulu di menu Data Kelas sebelum menambahkan guru.');
-      return;
-    }
     openTeacherForm();
   });
   document.getElementById('closeTeacherModal').addEventListener('click', () => closeModal('teacherModal'));
@@ -163,7 +159,7 @@ async function simpanGuru(event) {
       Toast.warning('Masukkan email login guru dengan format yang valid.');
       valid = false;
     }
-    if (password.length < 6) {
+    if (APP_CONFIG.BACKEND !== 'firebase' && password.length < 6) {
       Toast.warning('Password awal minimal 6 karakter.');
       valid = false;
     }
@@ -175,10 +171,8 @@ async function simpanGuru(event) {
     document.getElementById('errTeacherName').textContent = 'Nama minimal 3 karakter.';
     valid = false;
   }
-  if (!className || !daftarKelasGuru.some((kelas) => kelas.name === className)) {
-    Toast.warning(daftarKelasGuru.length
-      ? 'Pilih kelas yang valid untuk guru ini.'
-      : 'Belum ada data kelas. Tambahkan kelas terlebih dahulu di menu Data Kelas.');
+  if (className && !daftarKelasGuru.some((kelas) => kelas.name === className)) {
+    Toast.warning('Pilih kelas yang valid atau kosongkan jika penugasan belum dibuat.');
     valid = false;
   }
   if (!valid) return;
@@ -189,9 +183,10 @@ async function simpanGuru(event) {
 
   try {
     let account = null;
+    let provisioningResult = null;
     if (createAccount) {
       if (APP_CONFIG.BACKEND === 'firebase') {
-        await API.createTeacherAccount({
+        provisioningResult = await API.createTeacherAccount({
           account: { name, username, email, password },
           teacher: { subject, className, status }
         });
@@ -208,7 +203,11 @@ async function simpanGuru(event) {
       Toast.success('Data guru berhasil diperbarui.');
     } else {
       if (APP_CONFIG.BACKEND === 'firebase' && createAccount) {
-        Toast.success('Akun dan profil guru berhasil dibuat.');
+        if (provisioningResult?.invitationSent) {
+          Toast.success('Akun dan profil guru berhasil dibuat. Email pengaturan password telah dikirim.');
+        } else {
+          Toast.warning(provisioningResult?.invitationError || 'Akun dibuat, tetapi status email pengaturan password tidak diketahui.');
+        }
       } else {
         try {
           await API.createTeacher(payload);

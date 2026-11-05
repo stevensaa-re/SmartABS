@@ -20,17 +20,21 @@ function validateAccount(input, role) {
 
 function validateStudent(input) {
   const nis = typeof input?.nis === 'string' ? input.nis.trim() : '';
+  const classId = typeof input?.classId === 'string' ? input.classId.trim() : '';
   const className = typeof input?.className === 'string' ? input.className.trim() : '';
   const gender = input?.gender || 'L';
   const status = input?.status || 'Aktif';
 
   if (!/^\d{4,20}$/.test(nis)) throw new Error('NIS harus 4-20 digit.');
-  if (!className || className.length > 50) throw new Error('Kelas wajib dipilih.');
+  if ((!classId && !className) || className.length > 50 || classId.length > 128) {
+    throw new Error('Kelas wajib dipilih.');
+  }
   if (!['L', 'P'].includes(gender)) throw new Error('Jenis kelamin tidak valid.');
   if (!['Aktif', 'Nonaktif'].includes(status)) throw new Error('Status siswa tidak valid.');
 
   return {
     nis,
+    ...(classId ? { classId } : {}),
     className,
     gender,
     status,
@@ -41,12 +45,12 @@ function validateStudent(input) {
 function validateTeacher(input) {
   const className = typeof input?.className === 'string' ? input.className.trim() : '';
   const status = input?.status || 'Aktif';
-  if (!className || className.length > 50) throw new Error('Kelas wajib dipilih.');
+  if (className.length > 50) throw new Error('Nama kelas tidak boleh melebihi 50 karakter.');
   if (!['Aktif', 'Nonaktif'].includes(status)) throw new Error('Status guru tidak valid.');
   return {
     className,
     status,
-    subject: typeof input.subject === 'string' ? input.subject.trim().slice(0, 100) : ''
+    subject: typeof input?.subject === 'string' ? input.subject.trim().slice(0, 100) : ''
   };
 }
 

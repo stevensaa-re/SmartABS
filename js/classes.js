@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (document.body.dataset.page !== 'classes') return;
 
   const tbody = document.getElementById('classTableBody');
-  tbody.innerHTML = loadingRow(7);
+  tbody.innerHTML = loadingRow(8);
 
   [daftarKelasAdmin, daftarSiswaKelas] = await Promise.all([
     API.getClasses(),
@@ -19,7 +19,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderKelas();
 
   document.getElementById('searchClass').addEventListener('input', debounce(renderKelas));
-  document.getElementById('btnAddClass').addEventListener('click', () => openClassForm());
+  document.getElementById('btnAddClass')?.addEventListener('click', (event) => {
+    if (APP_CONFIG.BACKEND === 'firebase') return;
+    event.preventDefault();
+    openClassForm();
+  });
   document.getElementById('closeClassModal').addEventListener('click', () => closeModal('classModal'));
   document.getElementById('cancelClassModal').addEventListener('click', () => closeModal('classModal'));
   document.getElementById('classForm').addEventListener('submit', simpanKelas);
@@ -46,26 +50,21 @@ function renderKelas() {
           <td>${escapeHtml(kelas.major)}</td>
           <td>${escapeHtml(kelas.homeroom || '-')}</td>
           <td><span class="badge badge-info">${hitungSiswa(kelas.name)} siswa</span></td>
+          <td><span class="badge ${kelas.isActive === false ? 'badge-muted' : 'badge-success'}">${kelas.isActive === false ? 'Nonaktif' : 'Aktif'}</span></td>
           <td>
             <div class="action-btns">
-              <button class="btn-icon" data-action="edit" data-id="${kelas.id}" title="Edit">
-                <i class="fa-solid fa-pen"></i>
-              </button>
-              <button class="btn-icon danger" data-action="delete" data-id="${kelas.id}" title="Hapus">
-                <i class="fa-solid fa-trash"></i>
-              </button>
+              <a class="btn btn-outline btn-sm" href="school.html?type=classes">Buka master data</a>
             </div>
           </td>
         </tr>`).join('')
-    : emptyTableRow(7, 'Kelas tidak ditemukan', 'Coba ubah kata kunci pencarian.');
+    : emptyTableRow(8, 'Kelas tidak ditemukan', 'Kelola rombongan belajar melalui Setup Sekolah.');
 
   document.getElementById('classCount').textContent = `${hasil.length} kelas ditampilkan`;
 
-  tbody.querySelectorAll('[data-action="edit"]').forEach((button) =>
-    button.addEventListener('click', () => openClassForm(button.dataset.id)));
-
-  tbody.querySelectorAll('[data-action="delete"]').forEach((button) =>
-    button.addEventListener('click', () => hapusKelas(button.dataset.id)));
+  if (APP_CONFIG.BACKEND === 'firebase') {
+    document.getElementById('btnAddClass')?.remove();
+    return;
+  }
 }
 
 function openClassForm(id = null) {

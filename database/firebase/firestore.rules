@@ -175,20 +175,14 @@ service cloud.firestore {
       allow read: if sameSchool(resource.data)
         && (isAdmin() || teaches(resource.data.name)
           || (isSiswa() && resource.data.name == myClassName()));
-      allow create: if isAdmin() && newDataInMySchool();
-      allow update: if isAdmin() && sameSchool(resource.data) && newDataInMySchool();
-      allow delete: if isAdmin() && sameSchool(resource.data);
+      allow create, update, delete: if false;
     }
 
     match /schedules/{id} {
       allow read: if sameSchool(resource.data)
         && (isAdmin() || (isGuru() && resource.data.teacherUid == request.auth.uid)
           || (isSiswa() && resource.data.className == myClassName()));
-      allow create: if isAdmin() && newDataInMySchool()
-        && activeTeacher(request.resource.data.teacherUid);
-      allow update: if isAdmin() && sameSchool(resource.data) && newDataInMySchool()
-        && activeTeacher(request.resource.data.teacherUid);
-      allow delete: if isAdmin() && sameSchool(resource.data);
+      allow create, update, delete: if false;
     }
 
     match /announcements/{id} {
