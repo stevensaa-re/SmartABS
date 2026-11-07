@@ -922,6 +922,7 @@ const FirebaseAdapter = (() => {
         }
         const previous = current.exists ? current.data() : {};
         const data = {
+          schoolId: String(userProfile.data().schoolId || ''),
           studentId: student.nis,
           name: student.name,
           className: student.className,

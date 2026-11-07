@@ -32,9 +32,10 @@ async function initAdminDashboard() {
   grid.innerHTML = loadingBlock();
   tbody.innerHTML = loadingRow(4);
 
-  const [students, teachers, attendance] = await Promise.all([
+  const [students, teachers, classes, attendance] = await Promise.all([
     API.getStudents(),
     API.getTeachers(),
+    API.getClasses(),
     API.getAttendanceRange(shiftDate(-6), today)   // cukup 7 hari terakhir
   ]);
 
@@ -49,11 +50,8 @@ async function initAdminDashboard() {
   grid.innerHTML = [
     statCard({ label: 'Total Siswa', value: students.filter((s) => s.status === 'Aktif').length, icon: 'fa-user-graduate', tone: 'primary' }),
     statCard({ label: 'Total Guru', value: teachers.filter((t) => t.status === 'Aktif').length, icon: 'fa-chalkboard-user', tone: 'info' }),
+    statCard({ label: 'Kelas Aktif', value: classes.filter((c) => c.status !== 'Nonaktif').length, icon: 'fa-school', tone: 'info' }),
     statCard({ label: 'Hadir Hari Ini', value: hadir, icon: 'fa-circle-check', tone: 'success' }),
-    statCard({ label: 'Terlambat', value: terlambat, icon: 'fa-clock', tone: 'warning' }),
-    statCard({ label: 'Izin', value: izin, icon: 'fa-file-lines', tone: 'info' }),
-    statCard({ label: 'Sakit', value: sakit, icon: 'fa-notes-medical', tone: 'warning' }),
-    statCard({ label: 'Alpa', value: alpa, icon: 'fa-user-xmark', tone: 'danger' })
   ].join('');
 
   /* ---- Tren 7 hari ---- */

@@ -252,6 +252,16 @@ test('a teacher cannot record attendance against a colleague schedule', async ()
       `other=${otherResult.status} (${otherResult.body})`
     );
   }
+  const history = await firestoreRequest(
+    'attendance/schedule-a_2026-11-04_NIS-1/history/change-schedule-a',
+    identities.teacherA.token
+  );
+  const historyBody = await history.json();
+  if (history.status !== 200
+      || historyBody.fields?.actorUid?.stringValue !== identities.teacherA.uid
+      || historyBody.fields?.nextStatus?.stringValue !== 'Hadir') {
+    throw new Error(`Manual attendance audit history was not persisted correctly: ${JSON.stringify(historyBody)}`);
+  }
 });
 
 test('a student cannot write QR attendance directly to Firestore', async () => {
@@ -404,6 +414,7 @@ async function writeManualAttendance({ scheduleId, teacherUid, subject }) {
   const changeId = `change-${scheduleId}`;
   const response = await commit([
     updateWrite(`attendance/${id}`, {
+      schoolId: string('school-a'),
       studentId: string('NIS-1'),
       name: string('Student One'),
       className: string('Class One'),

@@ -11,6 +11,12 @@
   .navbar-date { display: none; }
 }
 
+@media (min-width: 1025px) {
+  .nav-group-toggle { cursor: default; }
+  .nav-group-toggle i { display: none; }
+  .nav-group-items { display: block; }
+}
+
 @media (max-width: 860px) {
   .login-wrapper { grid-template-columns: 1fr; }
   .login-brand { display: none; }
@@ -38,8 +44,10 @@
   .data-table thead th, .data-table tbody td, .data-table tfoot td { padding: 11px 12px; }
   .demo-grid { grid-template-columns: 1fr; }
   .login-card { padding: 26px 20px; }
+  .quick-actions-grid { grid-template-columns: 1fr 1fr; }
 }
 
 @media (max-width: 400px) {
   .stats-grid { grid-template-columns: 1fr; }
+  .quick-actions-grid { grid-template-columns: 1fr; }
 }
