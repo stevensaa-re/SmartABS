@@ -17,6 +17,7 @@ test('Firebase callables provision accounts and enforce QR attendance atomically
 }, async () => {
   const admin = await createIdentity('admin');
   const teacher = await createIdentity('teacher');
+  const secondTeacher = await createIdentity('second-teacher');
   const unassignedTeacher = await createIdentity('unassigned-teacher');
   const student = await createIdentity('student');
   const otherClassStudent = await createIdentity('other-class-student');
@@ -49,6 +50,14 @@ test('Firebase callables provision accounts and enforce QR attendance atomically
       role: string('guru'),
       status: string('Aktif'),
       className: string('Class One'),
+      schoolId: string('school-a')
+    }),
+    write(`users/${secondTeacher.uid}`, {
+      name: string('Teacher B'),
+      username: string('teacher-b'),
+      usernameLower: string('teacher-b'),
+      role: string('guru'),
+      status: string('Aktif'),
       schoolId: string('school-a')
     }),
     write(`users/${unassignedTeacher.uid}`, {
@@ -90,6 +99,10 @@ test('Firebase callables provision accounts and enforce QR attendance atomically
       name: string('Class One'),
       schoolId: string('school-a')
     }),
+    write('classes/class-two', {
+      name: string('Class Two'),
+      schoolId: string('school-a')
+    }),
     write('semesters/semester-a', {
       name: string('Semester Aktif'),
       status: string('Aktif'),
@@ -99,6 +112,7 @@ test('Firebase callables provision accounts and enforce QR attendance atomically
       nis: string('NIS-1'),
       name: string('Student A'),
       className: string('Class One'),
+      classId: string('class-one'),
       status: string('Aktif'),
       schoolId: string('school-a')
     }),
@@ -113,15 +127,64 @@ test('Firebase callables provision accounts and enforce QR attendance atomically
       nis: string('NIS-3'),
       name: string('Student Other Class'),
       className: string('Class Two'),
+      classId: string('class-two'),
       status: string('Aktif'),
       schoolId: string('school-a')
     }),
+    write('semesterConfigurations/assignment-a-one', assignment('Class One', 'class-one', 'subject-math', teacher.uid)),
+    write('semesterConfigurations/assignment-a-two', assignment('Class Two', 'class-two', 'subject-network', teacher.uid)),
+    write('semesterConfigurations/assignment-b-one', assignment('Class One', 'class-one', 'subject-science', secondTeacher.uid)),
     write('schedules/schedule-a', {
       teacherUid: string(teacher.uid),
       teacher: string('Teacher A'),
       className: string('Class One'),
+      classId: string('class-one'),
+      subjectId: string('subject-math'),
       subject: string('Mathematics'),
+      teacherAssignmentId: string('assignment-a-one'),
       semesterId: string('semester-a'),
+      schoolId: string('school-a')
+    }),
+    write('schedules/schedule-b', {
+      teacherUid: string(secondTeacher.uid),
+      teacher: string('Teacher B'),
+      className: string('Class One'),
+      classId: string('class-one'),
+      subjectId: string('subject-science'),
+      subject: string('Science'),
+      teacherAssignmentId: string('assignment-b-one'),
+      semesterId: string('semester-a'),
+      schoolId: string('school-a')
+    }),
+    write('schedules/schedule-c', {
+      teacherUid: string(teacher.uid),
+      teacher: string('Teacher A'),
+      className: string('Class Two'),
+      classId: string('class-two'),
+      subjectId: string('subject-network'),
+      subject: string('Networking'),
+      teacherAssignmentId: string('assignment-a-two'),
+      semesterId: string('semester-a'),
+      schoolId: string('school-a')
+    }),
+    write('permissions/permission-class-one', {
+      studentId: string('NIS-1'),
+      name: string('Student A'),
+      className: string('Class One'),
+      date: string('2026-11-06'),
+      type: string('Izin'),
+      note: string('Medical appointment'),
+      status: string('Menunggu'),
+      schoolId: string('school-a')
+    }),
+    write('permissions/permission-class-two', {
+      studentId: string('NIS-3'),
+      name: string('Student Other Class'),
+      className: string('Class Two'),
+      date: string('2026-11-06'),
+      type: string('Sakit'),
+      note: string('Medical appointment'),
+      status: string('Menunggu'),
       schoolId: string('school-a')
     })
   ]);
@@ -179,6 +242,28 @@ test('Firebase callables provision accounts and enforce QR attendance atomically
     day: '2-digit'
   }).formatToParts(new Date()).map(({ type, value }) => [type, value]));
   const date = `${dateParts.year}-${dateParts.month}-${dateParts.day}`;
+  const rosterResult = await callFunction('getTeacherRoster', {}, teacher.token);
+  assert.equal(rosterResult.status, 200, rosterResult.body);
+  assert.deepEqual(rosterResult.data.classes.map((item) => item.name).sort(), ['Class One', 'Class Two']);
+  assert.deepEqual(rosterResult.data.students.map((item) => item.nis).sort(), ['12345', 'NIS-1', 'NIS-3']);
+  assert.equal(rosterResult.data.semesterId, 'semester-a');
+  const unassignedRoster = await callFunction('getTeacherRoster', {}, unassignedTeacher.token);
+  assert.equal(unassignedRoster.status, 200, unassignedRoster.body);
+  assert.deepEqual(unassignedRoster.data.classes, []);
+  assert.deepEqual(unassignedRoster.data.students, []);
+
+  const unauthorizedPermission = await callFunction('reviewTeacherPermission', {
+    permissionId: 'permission-class-one',
+    status: 'Disetujui'
+  }, unassignedTeacher.token);
+  assert.notEqual(unauthorizedPermission.status, 200);
+  const permissionResult = await callFunction('reviewTeacherPermission', {
+    permissionId: 'permission-class-two',
+    status: 'Disetujui'
+  }, teacher.token);
+  assert.equal(permissionResult.status, 200, permissionResult.body);
+  assert.equal(permissionResult.data.status, 'Disetujui');
+
   const sessionResult = await callFunction('startAttendanceSession', {
     scheduleId: 'schedule-a',
     date
@@ -187,11 +272,21 @@ test('Firebase callables provision accounts and enforce QR attendance atomically
   const session = sessionResult.data;
   assert.match(session.token, /^[a-f0-9]{32}$/);
 
+  const secondClassSession = await callFunction('startAttendanceSession', {
+    scheduleId: 'schedule-c',
+    date
+  }, teacher.token);
+  assert.equal(secondClassSession.status, 200, secondClassSession.body);
+
   const unassignedSession = await callFunction('startAttendanceSession', {
-    scheduleId: 'schedule-a',
+    scheduleId: 'schedule-b',
     date
   }, unassignedTeacher.token);
   assert.notEqual(unassignedSession.status, 200);
+  const otherTeacherCannotCloseSession = await callFunction('closeAttendanceSession', {
+    sessionId: session.id
+  }, secondTeacher.token);
+  assert.notEqual(otherTeacherCannotCloseSession.status, 200);
 
   const [firstScan, replayedScan] = await Promise.all([
     callFunction('submitQrAttendance', { sessionId: session.id, token: session.token }, student.token),
@@ -199,6 +294,10 @@ test('Firebase callables provision accounts and enforce QR attendance atomically
   ]);
   assert.equal([firstScan.status, replayedScan.status].filter((status) => status === 200).length, 1);
   assert.equal([firstScan.status, replayedScan.status].filter((status) => status !== 200).length, 1);
+  const savedAttendance = await firestoreGet(`attendance/${session.id}_NIS-1`, student.token);
+  assert.equal(savedAttendance.status, 200, JSON.stringify(savedAttendance.data));
+  assert.equal(savedAttendance.data.fields.source.stringValue, 'qr');
+  assert.equal(savedAttendance.data.fields.scheduleId.stringValue, 'schedule-a');
 
   const crossSchoolScan = await callFunction('submitQrAttendance', {
     sessionId: session.id,
@@ -277,10 +376,37 @@ async function commit(writes) {
   return { status: response.status, body: await response.text() };
 }
 
+async function firestoreGet(path, token) {
+  const response = await fetch(`${firestoreBase}/${path}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  return { status: response.status, data: await response.json() };
+}
+
 function write(path, fields) {
   return {
     update: { name: `${documentPrefix}/${path}`, fields },
     currentDocument: { exists: false }
+  };
+}
+
+function assignment(className, classId, subjectId, teacherUid) {
+  return {
+    semesterId: string('semester-a'),
+    type: string('teacherAssignments'),
+    schoolId: string('school-a'),
+    payload: {
+      mapValue: {
+        fields: {
+          className: string(className),
+          classId: string(classId),
+          subject: string(subjectId),
+          subjectId: string(subjectId),
+          teacherUid: string(teacherUid),
+          teacherName: string('Teacher')
+        }
+      }
+    }
   };
 }
 

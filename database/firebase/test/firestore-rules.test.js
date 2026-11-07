@@ -13,9 +13,9 @@ let sessionStart;
 before(async () => {
   for (const [key, role, nis, schoolId] of [
     ['admin', 'admin'],
-    ['teacherA', 'guru'],
-    ['teacherB', 'guru'],
-    ['studentA', 'siswa', 'NIS-1'],
+    ['teacherA', 'guru', '', 'school-a'],
+    ['teacherB', 'guru', '', 'school-a'],
+    ['studentA', 'siswa', 'NIS-1', 'school-a'],
     ['tenantAdminA', 'admin', '', 'school-a'],
     ['tenantAdminB', 'admin', '', 'school-b']
   ]) {
@@ -25,7 +25,8 @@ before(async () => {
   const seedResult = await commit([
     updateWrite('schools/school-a', {
       status: string('Aktif'),
-      timeZone: string('Asia/Jakarta')
+      timeZone: string('Asia/Jakarta'),
+      activeSemesterId: string('semester-a')
     }, [], false),
     updateWrite('schools/school-b', {
       status: string('Aktif'),
@@ -49,7 +50,21 @@ before(async () => {
       nis: string('NIS-1'),
       name: string('Student One'),
       className: string('Class One'),
-      status: string('Aktif')
+      classId: string('class-one'),
+      status: string('Aktif'),
+      schoolId: string('school-a')
+    }, [], false),
+    updateWrite('students/NIS-OTHER', {
+      nis: string('NIS-OTHER'),
+      name: string('Other Student'),
+      className: string('Class One'),
+      classId: string('class-one'),
+      status: string('Aktif'),
+      schoolId: string('school-a')
+    }, [], false),
+    updateWrite('classes/class-one', {
+      name: string('Class One'),
+      schoolId: string('school-a')
     }, [], false),
     updateWrite('classes/tenant-class-a', {
       name: string('Tenant Class A'),
@@ -63,13 +78,23 @@ before(async () => {
       teacherUid: string(identities.teacherA.uid),
       teacher: string('Teacher A'),
       className: string('Class One'),
-      subject: string('Mathematics')
+      classId: string('class-one'),
+      subjectId: string('subject-math'),
+      subject: string('Mathematics'),
+      semesterId: string('semester-a'),
+      teacherAssignmentId: string('config-teacher-a'),
+      schoolId: string('school-a')
     }, [], false),
     updateWrite('schedules/schedule-b', {
       teacherUid: string(identities.teacherB.uid),
       teacher: string('Teacher B'),
       className: string('Class One'),
-      subject: string('Science')
+      classId: string('class-one'),
+      subjectId: string('subject-science'),
+      subject: string('Science'),
+      semesterId: string('semester-a'),
+      teacherAssignmentId: string('config-teacher-b'),
+      schoolId: string('school-a')
     }, [], false),
     updateWrite('permissions/permission-a', {
       studentId: string('NIS-1'),
@@ -78,11 +103,12 @@ before(async () => {
       date: string('2026-11-04'),
       type: string('Izin'),
       note: string('Medical appointment'),
-      status: string('Menunggu')
+      status: string('Menunggu'),
+      schoolId: string('school-a')
     }, [], false),
     updateWrite('semesters/semester-a', {
       name: string('School A Semester'),
-      status: string('Draft'),
+      status: string('Aktif'),
       schoolId: string('school-a')
     }, [], false),
     updateWrite('semesters/semester-b', {
@@ -94,6 +120,28 @@ before(async () => {
       semesterId: string('semester-a'),
       type: string('subjects'),
       schoolId: string('school-a')
+    }, [], false),
+    updateWrite('semesterConfigurations/config-teacher-a', {
+      semesterId: string('semester-a'),
+      type: string('teacherAssignments'),
+      schoolId: string('school-a'),
+      payload: mapValue({
+        classId: string('class-one'),
+        className: string('Class One'),
+        subjectId: string('subject-math'),
+        teacherUid: string(identities.teacherA.uid)
+      })
+    }, [], false),
+    updateWrite('semesterConfigurations/config-teacher-b', {
+      semesterId: string('semester-a'),
+      type: string('teacherAssignments'),
+      schoolId: string('school-a'),
+      payload: mapValue({
+        classId: string('class-one'),
+        className: string('Class One'),
+        subjectId: string('subject-science'),
+        teacherUid: string(identities.teacherB.uid)
+      })
     }, [], false),
     updateWrite('semesterConfigurations/config-b', {
       semesterId: string('semester-b'),
@@ -273,7 +321,19 @@ test('a teacher cannot create or mutate an attendance session directly', async (
   }
 });
 
-test('a class teacher can approve a pending permission with matching attendance history', async () => {
+test('teachers cannot directly read other students or mutate permission records', async () => {
+  const ownStudent = await firestoreRequest('students/NIS-1', identities.studentA.token);
+  const otherStudent = await firestoreRequest('students/NIS-OTHER', identities.studentA.token);
+  const teacherRosterRead = await firestoreRequest('students/NIS-1', identities.teacherA.token);
+  if (ownStudent.status !== 200 || otherStudent.status !== 403 || teacherRosterRead.status !== 403) {
+    throw new Error(
+      `Unexpected roster access: own student=${ownStudent.status}, other student=${otherStudent.status}, ` +
+      `teacher direct read=${teacherRosterRead.status}`
+    );
+  }
+});
+
+test('teachers cannot directly mutate permission and attendance records', async () => {
   const permissionId = 'permission-a';
   const attendanceId = '2026-11-04_NIS-1';
   const historyId = 'permission-change';
@@ -282,8 +342,8 @@ test('a class teacher can approve a pending permission with matching attendance 
       status: string('Disetujui')
     }, [], 'exists', ['status'])
   ], identities.teacherA.token);
-  if (permissionResponse.status !== 200) {
-    throw new Error(`Teacher could not approve pending permission: ${await permissionResponse.text()}`);
+  if (permissionResponse.status !== 403) {
+    throw new Error(`Teacher direct permission update should be denied: ${await permissionResponse.text()}`);
   }
   const response = await commit([
     updateWrite(`attendance/${attendanceId}`, {
@@ -316,8 +376,8 @@ test('a class teacher can approve a pending permission with matching attendance 
     }, ['createdAt'], false)
   ], identities.teacherA.token);
   const body = await response.text();
-  if (response.status !== 200) {
-    throw new Error(`Teacher permission approval was rejected (${response.status}): ${body}`);
+  if (response.status !== 403) {
+    throw new Error(`Teacher direct attendance update should be denied (${response.status}): ${body}`);
   }
 });
 
@@ -421,6 +481,10 @@ function authHeaders(token) {
 
 function string(value) {
   return { stringValue: value };
+}
+
+function mapValue(fields) {
+  return { mapValue: { fields } };
 }
 
 function bool(value) {

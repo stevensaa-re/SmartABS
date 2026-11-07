@@ -31,6 +31,10 @@ service cloud.firestore {
     function isGuru()       { return active() && me().role == 'guru'; }
     function isSiswa()      { return active() && me().role == 'siswa'; }
     function isStaff()      { return isAdmin() || isGuru(); }
+    function auditActor() {
+      let actor = me();
+      return actor.role in ['admin', 'guru'] && actor.status == 'Aktif';
+    }
     function schoolId()     { return me().get('schoolId', ''); }
     function sameSchool(data) {
       return signedIn() && data.get('schoolId', '') == schoolId();
@@ -38,12 +42,53 @@ service cloud.firestore {
     function newDataInMySchool() {
       return sameSchool(request.resource.data);
     }
-    function assignedClass() { return me().get('className', ''); }
+    function activeSemesterSchedule(schedule) {
+      return schoolId() != ''
+        && exists(/databases/$(database)/documents/schools/$(schoolId()))
+        && schedule.semesterId is string
+        && schedule.semesterId != ''
+        && get(/databases/$(database)/documents/schools/$(schoolId())).data.activeSemesterId
+          == schedule.semesterId;
+    }
+    function activeTeacherAssignment(schedule) {
+      let assignmentPath = /databases/$(database)/documents/semesterConfigurations/$(schedule.get('teacherAssignmentId', ''));
+      let assignment = get(assignmentPath).data;
+      return schedule.get('teacherAssignmentId', '') is string
+        && schedule.get('teacherAssignmentId', '') != ''
+        && exists(assignmentPath)
+        && sameSchool(assignment)
+        && assignment.type == 'teacherAssignments'
+        && assignment.semesterId == schedule.semesterId
+        && assignment.payload.teacherUid == schedule.teacherUid
+        && assignment.payload.classId == schedule.classId
+        && assignment.payload.subjectId == schedule.subjectId;
+    }
     function assignedSchedule(scheduleId) {
+      let schedulePath = /databases/$(database)/documents/schedules/$(scheduleId);
+      let schedule = get(schedulePath).data;
       return isGuru()
-        && exists(/databases/$(database)/documents/schedules/$(scheduleId))
-        && sameSchool(get(/databases/$(database)/documents/schedules/$(scheduleId)).data)
-        && get(/databases/$(database)/documents/schedules/$(scheduleId)).data.teacherUid == request.auth.uid;
+        && exists(schedulePath)
+        && sameSchool(schedule)
+        && schedule.teacherUid == request.auth.uid
+        && activeSemesterSchedule(schedule)
+        && activeTeacherAssignment(schedule);
+    }
+    function assignedAttendanceSchedule(scheduleId) {
+      let schedulePath = /databases/$(database)/documents/schedules/$(scheduleId);
+      let schedule = get(schedulePath).data;
+      let assignmentPath = /databases/$(database)/documents/semesterConfigurations/$(schedule.get('teacherAssignmentId', ''));
+      return isGuru()
+        && exists(schedulePath)
+        && sameSchool(schedule)
+        && schedule.teacherUid == request.auth.uid
+        && activeSemesterSchedule(schedule)
+        && schedule.get('teacherAssignmentId', '') is string
+        && schedule.get('teacherAssignmentId', '') != ''
+        && exists(assignmentPath)
+        && sameSchool(get(assignmentPath).data)
+        && get(assignmentPath).data.type == 'teacherAssignments'
+        && get(assignmentPath).data.semesterId == schedule.semesterId
+        && get(assignmentPath).data.payload.teacherUid == request.auth.uid;
     }
     function activeTeacher(uid) {
       return uid is string
@@ -52,9 +97,6 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/users/$(uid)).data.role == 'guru'
         && get(/databases/$(database)/documents/users/$(uid)).data.status == 'Aktif'
         && sameSchool(get(/databases/$(database)/documents/users/$(uid)).data);
-    }
-    function teaches(className) {
-      return isGuru() && assignedClass() != '' && className == assignedClass();
     }
     function enrolledIn(studentId, className) {
       return exists(/databases/$(database)/documents/students/$(studentId))
@@ -78,20 +120,11 @@ service cloud.firestore {
       return request.resource.data.lastChangeId is string
         && request.resource.data.updatedAt == request.time
         && existsAfter(/databases/$(database)/documents/attendance/$(id)/history/$(request.resource.data.lastChangeId))
-        && matchingAttendanceHistory(id, request.resource.data.lastChangeId);
-    }
-    function matchingAttendanceHistory(id, changeId) {
-      let history = getAfter(/databases/$(database)/documents/attendance/$(id)/history/$(changeId)).data;
-      return history.actorUid == request.auth.uid
-        && history.studentId == request.resource.data.studentId
-        && history.className == request.resource.data.className
-        && history.date == request.resource.data.date
-        && history.nextStatus == request.resource.data.status
-        && history.nextNote == request.resource.data.note
-        && history.createdAt == request.time;
+        && getAfter(/databases/$(database)/documents/attendance/$(id)/history/$(request.resource.data.lastChangeId)).data.actorUid
+          == request.auth.uid;
     }
     function validPermissionAttendance(id) {
-      return (isAdmin() || teaches(request.resource.data.className))
+      return isAdmin()
         && request.resource.data.source == 'permission'
         && request.resource.data.permissionId is string
         && id == request.resource.data.date + '_' + request.resource.data.studentId
@@ -127,29 +160,46 @@ service cloud.firestore {
               == request.resource.data.className
             && get(/databases/$(database)/documents/schedules/$(request.resource.data.scheduleId)).data.subject
               == request.resource.data.subject
-            && activeTeacher(request.resource.data.teacherUid)
             && get(/databases/$(database)/documents/schedules/$(request.resource.data.scheduleId)).data.teacherUid
               == request.resource.data.teacherUid
-            && (isAdmin() || (assignedSchedule(request.resource.data.scheduleId)
-              && request.resource.data.teacherUid == request.auth.uid))
-            && (
-              id == request.resource.data.scheduleId + '_' + request.resource.data.date + '_' + request.resource.data.studentId
-              || (isGuru()
-                && id == request.resource.data.date + '_' + request.resource.data.studentId
-                && exists(/databases/$(database)/documents/attendance/$(id))
-                && resource.data.teacherUid == request.auth.uid)
-              || (request.resource.data.sessionId is string
-                && id == request.resource.data.sessionId + '_' + request.resource.data.studentId
-                && exists(/databases/$(database)/documents/attendanceSessions/$(request.resource.data.sessionId))
-                && sameSchool(qrSession(request.resource.data.sessionId))
-                && qrSession(request.resource.data.sessionId).date == request.resource.data.date
-                && qrSession(request.resource.data.sessionId).className == request.resource.data.className
-                && qrSession(request.resource.data.sessionId).scheduleId == request.resource.data.scheduleId
-                && qrSession(request.resource.data.sessionId).subject == request.resource.data.subject
-                && qrSession(request.resource.data.sessionId).teacherUid == request.resource.data.teacherUid)
-            ))
-        )
-        && hasAttendanceHistory(id);
+            && (isAdmin() || assignedAttendanceSchedule(request.resource.data.scheduleId))
+            && request.resource.data.source == 'manual'
+            && id == request.resource.data.scheduleId + '_' + request.resource.data.date + '_' + request.resource.data.studentId)
+        );
+    }
+    function validTeacherManualAttendance(id) {
+      let schedulePath = /databases/$(database)/documents/schedules/$(request.resource.data.scheduleId);
+      let assignmentPath = /databases/$(database)/documents/semesterConfigurations/$(get(schedulePath).data.get('teacherAssignmentId', ''));
+      let studentPath = /databases/$(database)/documents/students/$(request.resource.data.studentId);
+      return isGuru()
+        && request.resource.data.source == 'manual'
+        && request.resource.data.scheduleId is string
+        && exists(schedulePath)
+        && exists(assignmentPath)
+        && exists(studentPath)
+        && sameSchool(get(schedulePath).data)
+        && sameSchool(get(assignmentPath).data)
+        && sameSchool(get(studentPath).data)
+        && get(schedulePath).data.teacherUid == request.auth.uid
+        && get(schedulePath).data.className == request.resource.data.className
+        && get(schedulePath).data.subject == request.resource.data.subject
+        && get(studentPath).data.className == request.resource.data.className
+        && activeSemesterSchedule(get(schedulePath).data)
+        && get(assignmentPath).data.type == 'teacherAssignments'
+        && get(assignmentPath).data.semesterId == get(schedulePath).data.semesterId
+        && get(assignmentPath).data.payload.teacherUid == request.auth.uid
+        && id == request.resource.data.scheduleId + '_' + request.resource.data.date + '_' + request.resource.data.studentId
+        && request.resource.data.status in ['Hadir', 'Terlambat', 'Izin', 'Sakit', 'Alpa']
+        && request.resource.data.createdAt == request.time;
+    }
+    function validAdminManualAttendance(id) {
+      return isAdmin()
+        && newDataInMySchool()
+        && request.resource.data.source == 'manual'
+        && id == request.resource.data.date + '_' + request.resource.data.studentId
+        && !request.resource.data.keys().hasAny(['sessionId'])
+        && request.resource.data.status in ['Hadir', 'Terlambat', 'Izin', 'Sakit', 'Alpa']
+        && request.resource.data.createdAt == request.time;
     }
 
     // ---------- users ----------
@@ -173,15 +223,17 @@ service cloud.firestore {
     // ---------- data master ----------
     match /classes/{id} {
       allow read: if sameSchool(resource.data)
-        && (isAdmin() || teaches(resource.data.name)
-          || (isSiswa() && resource.data.name == myClassName()));
+        && (isAdmin() || (isSiswa() && resource.data.name == myClassName()));
       allow create, update, delete: if false;
     }
 
     match /schedules/{id} {
       allow read: if sameSchool(resource.data)
-        && (isAdmin() || (isGuru() && resource.data.teacherUid == request.auth.uid)
-          || (isSiswa() && resource.data.className == myClassName()));
+        && (isAdmin()
+          || (isGuru() && resource.data.teacherUid == request.auth.uid
+            && activeSemesterSchedule(resource.data) && activeTeacherAssignment(resource.data))
+          || (isSiswa() && resource.data.className == myClassName()
+            && activeSemesterSchedule(resource.data) && activeTeacherAssignment(resource.data)));
       allow create, update, delete: if false;
     }
 
@@ -203,7 +255,7 @@ service cloud.firestore {
 
     match /students/{nis} {
       allow read: if sameSchool(resource.data)
-        && (isAdmin() || teaches(resource.data.className) || (isSiswa() && nis == myNis()));
+        && (isAdmin() || (isSiswa() && nis == myNis()));
       allow create: if isAdmin() && newDataInMySchool();
       allow update: if isAdmin() && sameSchool(resource.data) && newDataInMySchool();
       allow delete: if isAdmin() && sameSchool(resource.data);
@@ -217,13 +269,13 @@ service cloud.firestore {
           && !exists(/databases/$(database)/documents/attendance/$(id)))
         || (sameSchool(resource.data) && (isAdmin()
           || (isGuru() && resource.data.teacherUid == request.auth.uid)
-          || (isGuru() && resource.data.source == 'permission' && teaches(resource.data.className))
           || (isSiswa() && myNis() != '' && id.matches('.*_' + myNis() + '$'))
           || (isSiswa() && resource.data.studentId == myNis())));
 
-      allow create: if (newDataInMySchool()
-        && ((request.resource.data.source == 'permission' && validPermissionAttendance(id))
-          || validManualAttendance(id)));
+      allow create: if (request.resource.data.source == 'permission'
+          && validPermissionAttendance(id))
+        || (request.resource.data.source == 'manual'
+          && (validTeacherManualAttendance(id) || validAdminManualAttendance(id)));
       allow update: if sameSchool(resource.data) && newDataInMySchool()
         && ((validPermissionAttendance(id)
           && resource.data.studentId == request.resource.data.studentId
@@ -249,33 +301,14 @@ service cloud.firestore {
             && ((isGuru()
                 && get(/databases/$(database)/documents/attendance/$(id)).data.teacherUid == request.auth.uid)
               || (isGuru()
-                && get(/databases/$(database)/documents/attendance/$(id)).data.source == 'permission'
-                && teaches(get(/databases/$(database)/documents/attendance/$(id)).data.className))
+                && get(/databases/$(database)/documents/attendance/$(id)).data.teacherUid == request.auth.uid)
               || (isSiswa() && get(/databases/$(database)/documents/attendance/$(id)).data.studentId == myNis()))));
-        allow create: if isStaff()
-          && sameSchool(getAfter(/databases/$(database)/documents/attendance/$(id)).data)
+        allow create: if signedIn()
+          && auditActor()
           && request.resource.data.actorUid == request.auth.uid
           && request.resource.data.reason is string
           && request.resource.data.reason.size() >= 5
-          && request.resource.data.createdAt == request.time
-          && existsAfter(/databases/$(database)/documents/attendance/$(id))
-          && getAfter(/databases/$(database)/documents/attendance/$(id)).data.lastChangeId == changeId
-          && getAfter(/databases/$(database)/documents/attendance/$(id)).data.studentId == request.resource.data.studentId
-          && getAfter(/databases/$(database)/documents/attendance/$(id)).data.className == request.resource.data.className
-          && getAfter(/databases/$(database)/documents/attendance/$(id)).data.date == request.resource.data.date
-          && getAfter(/databases/$(database)/documents/attendance/$(id)).data.status == request.resource.data.nextStatus
-          && getAfter(/databases/$(database)/documents/attendance/$(id)).data.note == request.resource.data.nextNote
-          && (isAdmin()
-            || (isGuru()
-              && getAfter(/databases/$(database)/documents/attendance/$(id)).data.teacherUid == request.auth.uid)
-            || (isGuru()
-              && getAfter(/databases/$(database)/documents/attendance/$(id)).data.source == 'permission'
-              && teaches(request.resource.data.className)))
-          && (exists(/databases/$(database)/documents/attendance/$(id))
-            ? request.resource.data.previousStatus == get(/databases/$(database)/documents/attendance/$(id)).data.status
-              && request.resource.data.previousNote == get(/databases/$(database)/documents/attendance/$(id)).data.get('note', '')
-            : request.resource.data.previousStatus == ''
-              && request.resource.data.previousNote == '');
+          && request.resource.data.createdAt == request.time;
         allow update, delete: if false;
       }
     }
@@ -290,15 +323,12 @@ service cloud.firestore {
     // ---------- izin / sakit ----------
     match /permissions/{id} {
       allow read: if sameSchool(resource.data)
-        && (isAdmin() || teaches(resource.data.className)
-          || (isSiswa() && resource.data.studentId == myNis()));
-      allow update: if sameSchool(resource.data) && newDataInMySchool()
+        && (isAdmin() || (isSiswa() && resource.data.studentId == myNis()));
+      allow update: if isAdmin() && sameSchool(resource.data) && newDataInMySchool()
         && resource.data.status == 'Menunggu'
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
-        && request.resource.data.status in ['Disetujui', 'Ditolak']
-        && (isAdmin() || (teaches(resource.data.className)
-          && teaches(request.resource.data.className)));
-      allow delete: if sameSchool(resource.data) && (isAdmin() || teaches(resource.data.className));
+        && request.resource.data.status in ['Disetujui', 'Ditolak'];
+      allow delete: if sameSchool(resource.data) && isAdmin();
 
       allow create: if newDataInMySchool() && (isAdmin()
         || (isSiswa()

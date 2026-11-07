@@ -269,6 +269,15 @@ const FirebaseAdapter = (() => {
     return student.exists ? String(student.data().className || '') : '';
   }
 
+  async function getTeacherRoster() {
+    const roster = await callFunction('getTeacherRoster', {});
+    if (!roster || !Array.isArray(roster.classes) || !Array.isArray(roster.students) ||
+        !Array.isArray(roster.permissions)) {
+      throw new Error('Respons roster guru dari Firebase tidak valid.');
+    }
+    return roster;
+  }
+
   async function resolveTeacherUid(teacherName) {
     const name = String(teacherName || '').trim();
     if (!name) throw new Error('Pilih guru yang akan mengajar jadwal ini.');
@@ -517,13 +526,15 @@ const FirebaseAdapter = (() => {
     /* ---------------- STUDENTS ---------------- */
 
     getStudents: () => run(async () => {
-      const className = await assignedClassName();
       const session = Session.get();
-      let ref = col('students');
-      if (session && session.role === 'guru') {
-        if (!className) return [];
-        ref = ref.where('className', '==', className);
+      if (session?.role === 'guru') {
+        return (await getTeacherRoster()).students;
       }
+      if (session?.role === 'siswa') {
+        const student = await FirebaseAdapter.getStudentByUserId(session.id);
+        return student ? [student] : [];
+      }
+      let ref = col('students');
       return fromSnap(await ref.get()).map(({ id, ...student }) => ({ nis: id, ...student }));
     }),
 
@@ -636,8 +647,11 @@ const FirebaseAdapter = (() => {
     /* ---------------- CLASSES ---------------- */
 
     getClasses: () => run(async () => {
-      const className = await assignedClassName();
       const session = Session.get();
+      if (session?.role === 'guru') {
+        return (await getTeacherRoster()).classes;
+      }
+      const className = session?.role === 'siswa' ? await assignedClassName() : '';
       const ref = session && ['guru', 'siswa'].includes(session.role)
         ? col('classes').where('name', '==', className || '__unassigned__')
         : col('classes');
@@ -1015,10 +1029,12 @@ const FirebaseAdapter = (() => {
     /* ---------------- PERMISSIONS ---------------- */
 
     getPermissions: () => run(async () => {
-      const className = await assignedClassName();
       const session = Session.get();
-      const ref = session && session.role === 'guru'
-        ? col('permissions').where('className', '==', className || '__unassigned__')
+      if (session?.role === 'guru') {
+        return (await getTeacherRoster()).permissions.sort(byDateDesc);
+      }
+      const ref = session?.role === 'siswa'
+        ? col('permissions').where('studentId', '==', String(session.nis || ''))
         : col('permissions');
       return fromSnap(await ref.get()).sort(byDateDesc);
     }),
@@ -1054,6 +1070,9 @@ const FirebaseAdapter = (() => {
 
     reviewPermission: (id, status) => run(async () => {
       if (!['Disetujui', 'Ditolak'].includes(status)) throw new Error('Status tidak valid.');
+      if (Session.get()?.role === 'guru') {
+        return callFunction('reviewTeacherPermission', { permissionId: String(id), status });
+      }
 
       const permRef = col('permissions').doc(id);
       const firebaseUser = auth.currentUser;
@@ -1130,16 +1149,13 @@ const FirebaseAdapter = (() => {
       if (from) ref = ref.where('date', '>=', from);
       if (to) ref = ref.where('date', '<=', to);
 
-      let studentsRef = col('students');
-      if (session && session.role === 'guru') {
-        const assigned = await assignedClassName();
-        if (!assigned || (className && className !== assigned)) return [];
-        studentsRef = studentsRef.where('className', '==', assigned);
-      }
-      const [studentSnap, attendanceSnap] = await Promise.all([studentsRef.get(), ref.get()]);
+      const studentsPromise = session?.role === 'guru'
+        ? getTeacherRoster().then((roster) => roster.students)
+        : col('students').get().then((snapshot) =>
+          snapshot.docs.map((doc) => ({ nis: doc.id, ...doc.data() })));
+      const [students, attendanceSnap] = await Promise.all([studentsPromise, ref.get()]);
 
-      const students = studentSnap.docs
-        .map((doc) => ({ nis: doc.id, ...doc.data() }))
+      const activeStudents = students
         .filter((s) => s.status === 'Aktif' && (!className || s.className === className));
 
       const attendance = fromSnap(attendanceSnap).filter((row) =>
@@ -1147,7 +1163,7 @@ const FirebaseAdapter = (() => {
         (!subject || row.subject === subject) &&
         (!status || row.status === status));
 
-      return buildReport(students, attendance);
+      return buildReport(activeStudents, attendance);
     }),
 
     getCalendarEvents: () => run(async () =>

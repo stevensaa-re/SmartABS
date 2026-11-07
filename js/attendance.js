@@ -57,7 +57,7 @@ async function initAbsensiGuru() {
     API.getSchedules(),
     API.getStudents()
   ]);
-  schedulesGuru = schedules.filter((schedule) => !teacher || schedule.teacher === teacher.name);
+  schedulesGuru = schedules.filter((schedule) => schedule.teacherUid === session.id);
   kelasGuru = classes;
   semuaSiswaGuru = students;
 
@@ -67,7 +67,9 @@ async function initAbsensiGuru() {
     .join('');
 
   /* Default: kelas yang diampu guru */
-  const defaultClass = teacher ? teacher.className : (classes[0] ? classes[0].name : '');
+  const defaultClass = classes.some((kelas) => kelas.name === teacher?.className)
+    ? teacher.className
+    : (schedulesGuru[0]?.className || classes[0]?.name || '');
   if (defaultClass) classSelect.value = defaultClass;
   const requestedScheduleId = new URLSearchParams(window.location.search).get('scheduleId');
   refreshQrSchedules(schedulesGuru, defaultClass, requestedScheduleId);

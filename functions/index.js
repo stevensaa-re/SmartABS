@@ -89,6 +89,15 @@ async function requireActiveSemesterSchedule(transaction, actor, schedule) {
   if (schedule.semesterId !== activeSemesterId) {
     fail('failed-precondition', 'Jadwal tidak termasuk semester yang sedang aktif.');
   }
+  const configs = await transaction.get(semesterConfigQuery(activeSemesterId, actor.schoolId));
+  const assigned = configs.docs.some((doc) => {
+    const payload = doc.get('payload') || {};
+    return doc.get('type') === 'teacherAssignments' &&
+      payload.classId === schedule.classId &&
+      payload.subjectId === schedule.subjectId &&
+      payload.teacherUid === schedule.teacherUid;
+  });
+  if (!assigned) fail('failed-precondition', 'Jadwal tidak memiliki penugasan guru yang aktif pada semester ini.');
 }
 
 async function assertUsernameAvailable(usernameLower) {
@@ -884,6 +893,204 @@ exports.getActiveSemester = onCall({ region: REGION }, async (request) => {
   return { id: schoolSnapshot.get('activeSemesterId') || '' };
 });
 
+exports.getTeacherRoster = onCall({ region: REGION }, async (request) => {
+  const actor = await requireActiveUser(request);
+  if (actor.role !== 'guru') fail('permission-denied', 'Roster hanya tersedia untuk guru aktif.');
+  requireSchoolAdmin(actor);
+
+  const schoolSnapshot = await db.collection('schools').doc(actor.schoolId).get();
+  const semesterId = schoolSnapshot.get('activeSemesterId') || '';
+  if (!semesterId) return { semesterId: '', assignments: [], classes: [], students: [], permissions: [] };
+  const semesterSnapshot = await db.collection('semesters').doc(semesterId).get();
+  if (!semesterSnapshot.exists || semesterSnapshot.get('status') !== 'Aktif' ||
+      !sameSchool(actor.schoolId, semesterSnapshot.data())) {
+    fail('failed-precondition', 'Semester aktif sekolah tidak valid.');
+  }
+
+  const configSnapshot = await semesterConfigQuery(semesterId, actor.schoolId).get();
+  const assignments = configSnapshot.docs
+    .filter((doc) => doc.get('type') === 'teacherAssignments')
+    .map(semesterConfigRow)
+    .filter((row) => row.payload?.teacherUid === actor.uid);
+  const classIds = [...new Set(assignments.map((row) => row.payload.classId).filter(Boolean))];
+  const classNames = [...new Set(assignments.map((row) => row.payload.className).filter(Boolean))];
+  const classSnapshots = await Promise.all(classIds.map((id) => db.collection('classes').doc(id).get()));
+  const classes = classSnapshots
+    .filter((doc) => doc.exists && doc.get('isActive') !== false &&
+      sameSchool(actor.schoolId, doc.data()))
+    .map((doc) => ({
+      id: doc.id,
+      name: doc.get('name') || '',
+      level: doc.get('level') || '',
+      major: doc.get('major') || '',
+      majorId: doc.get('majorId') || '',
+      roomId: doc.get('roomId') || '',
+      homeroom: doc.get('homeroom') || '',
+      capacity: doc.get('capacity') || 36,
+      isActive: doc.get('isActive') !== false
+    }));
+  const allowedNames = new Set(classes.map((item) => item.name));
+  const allowedIds = new Set(classes.map((item) => item.id));
+  const permittedAssignments = assignments.filter((row) =>
+    allowedIds.has(row.payload.classId) && allowedNames.has(row.payload.className));
+
+  const [rostersById, rostersByName, permissionsByClass] = await Promise.all([
+    Promise.all(classes.map((item) =>
+      db.collection('students').where('classId', '==', item.id).get())),
+    Promise.all(classes.map((item) =>
+      db.collection('students').where('className', '==', item.name).get())),
+    Promise.all(classes.map((item) =>
+      db.collection('permissions').where('className', '==', item.name).get()))
+  ]);
+  const studentsById = new Map();
+  for (const snapshot of [...rostersById, ...rostersByName]) {
+    for (const doc of snapshot.docs) {
+      const student = doc.data();
+      if (!sameSchool(actor.schoolId, student) || student.status !== 'Aktif') continue;
+      const matchingClass = classes.find((item) =>
+        (student.classId && student.classId === item.id) ||
+        (!student.classId && student.className === item.name));
+      if (!matchingClass) continue;
+      studentsById.set(doc.id, {
+        nis: doc.id,
+        name: student.name || '',
+        className: matchingClass.name,
+        classId: matchingClass.id,
+        gender: student.gender || '',
+        status: student.status
+      });
+    }
+  }
+  const permissionsById = new Map();
+  for (const snapshot of permissionsByClass) {
+    for (const doc of snapshot.docs) {
+      const permission = doc.data();
+      if (!sameSchool(actor.schoolId, permission) || !allowedNames.has(permission.className)) continue;
+      permissionsById.set(doc.id, {
+        id: doc.id,
+        studentId: permission.studentId || '',
+        name: permission.name || '',
+        className: permission.className || '',
+        date: permission.date || '',
+        type: permission.type || '',
+        note: permission.note || '',
+        status: permission.status || ''
+      });
+    }
+  }
+
+  return {
+    semesterId,
+    assignments: permittedAssignments.map((row) => ({
+      id: row.id,
+      classId: row.payload.classId,
+      className: row.payload.className,
+      subjectId: row.payload.subjectId,
+      subject: row.payload.subject,
+      teacherUid: row.payload.teacherUid
+    })),
+    classes,
+    students: [...studentsById.values()],
+    permissions: [...permissionsById.values()]
+  };
+});
+
+exports.reviewTeacherPermission = onCall({ region: REGION }, async (request) => {
+  const actor = await requireActiveUser(request);
+  if (actor.role !== 'guru') fail('permission-denied', 'Hanya guru yang dapat meninjau pengajuan ini.');
+  requireSchoolAdmin(actor);
+  const permissionId = typeof request.data?.permissionId === 'string'
+    ? request.data.permissionId.trim() : '';
+  const status = request.data?.status;
+  if (!permissionId || !['Disetujui', 'Ditolak'].includes(status)) {
+    fail('invalid-argument', 'Pengajuan atau status tidak valid.');
+  }
+
+  const permissionRef = db.collection('permissions').doc(permissionId);
+  const audit = auditWrite(actor, 'review', 'permission', permissionId,
+    `Memutus pengajuan izin/sakit sebagai ${status}.`);
+  const result = await db.runTransaction(async (transaction) => {
+    const [schoolSnapshot, permissionSnapshot] = await Promise.all([
+      transaction.get(db.collection('schools').doc(actor.schoolId)),
+      transaction.get(permissionRef)
+    ]);
+    if (!schoolSnapshot.exists || schoolSnapshot.get('status') !== 'Aktif') {
+      fail('failed-precondition', 'Sekolah tidak aktif.');
+    }
+    if (!permissionSnapshot.exists) fail('not-found', 'Pengajuan tidak ditemukan.');
+    const permission = permissionSnapshot.data();
+    requireSameSchool(actor, permission);
+    if (permission.status !== 'Menunggu') {
+      fail('failed-precondition', 'Pengajuan ini sudah pernah diputuskan.');
+    }
+    const semesterId = schoolSnapshot.get('activeSemesterId') || '';
+    if (!semesterId) fail('failed-precondition', 'Belum ada semester aktif.');
+
+    const assignmentsQuery = semesterConfigQuery(semesterId, actor.schoolId);
+    const [studentSnapshot, assignmentsSnapshot] = await Promise.all([
+      transaction.get(db.collection('students').doc(permission.studentId)),
+      transaction.get(assignmentsQuery)
+    ]);
+    if (!studentSnapshot.exists || !sameSchool(actor.schoolId, studentSnapshot.data()) ||
+        studentSnapshot.get('className') !== permission.className) {
+      fail('failed-precondition', 'Data siswa tidak sesuai dengan pengajuan.');
+    }
+    const assigned = assignmentsSnapshot.docs.some((doc) => {
+      const payload = doc.get('payload') || {};
+      return doc.get('type') === 'teacherAssignments' &&
+        payload.teacherUid === actor.uid &&
+        payload.className === permission.className &&
+        (!studentSnapshot.get('classId') || payload.classId === studentSnapshot.get('classId'));
+    });
+    if (!assigned) fail('permission-denied', 'Kelas siswa tidak ditugaskan kepada Anda pada semester aktif.');
+
+    const attendanceRef = db.collection('attendance')
+      .doc(`${permission.date}_${permission.studentId}`);
+    const attendanceSnapshot = await transaction.get(attendanceRef);
+    const newStatus = status === 'Disetujui' ? permission.type : 'Alpa';
+    const note = status === 'Disetujui'
+      ? (permission.note || permission.type)
+      : `Pengajuan ditolak${permission.note ? `: ${permission.note}` : ''}`;
+    transaction.update(permissionRef, { status });
+    if (!attendanceSnapshot.exists || attendanceSnapshot.get('status') !== 'Hadir') {
+      const historyRef = attendanceRef.collection('history').doc();
+      transaction.set(attendanceRef, {
+        studentId: permission.studentId,
+        name: permission.name || studentSnapshot.get('name') || '',
+        className: permission.className,
+        date: permission.date,
+        source: 'permission',
+        permissionId,
+        teacherUid: actor.uid,
+        time: '-',
+        status: newStatus,
+        note,
+        lastChangeId: historyRef.id,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        schoolId: actor.schoolId
+      });
+      transaction.set(historyRef, {
+        actorUid: actor.uid,
+        actorName: actor.name || '',
+        action: attendanceSnapshot.exists ? 'updated' : 'created',
+        studentId: permission.studentId,
+        className: permission.className,
+        date: permission.date,
+        previousStatus: attendanceSnapshot.exists ? attendanceSnapshot.get('status') || '' : '',
+        previousNote: attendanceSnapshot.exists ? attendanceSnapshot.get('note') || '' : '',
+        nextStatus: newStatus,
+        nextNote: note,
+        reason: `Keputusan pengajuan ${permission.type}: ${status}`,
+        createdAt: FieldValue.serverTimestamp()
+      });
+    }
+    transaction.set(audit.ref, audit.data);
+    return { id: permissionId, ...permission, status };
+  });
+  return result;
+});
+
 exports.getSchoolSummary = onCall({ region: REGION }, async (request) => {
   const actor = await requireActiveUser(request);
   if (!actor.schoolId) return { school: null, activeSemester: null };
@@ -1662,6 +1869,13 @@ exports.activateSemester = onCall({ region: REGION }, async (request) => {
       if (!configuredAssignments.has(`${relation}\u0000${payload.teacherUid}`)) {
         fail('failed-precondition', `Guru ${payload.teacherName} belum ditugaskan ke mata pelajaran ${payload.subject}.`);
       }
+      const teacherAssignment = assignments.find((assignment) =>
+        assignment.payload.classId === classDoc.id &&
+        assignment.payload.subjectId === payload.subjectId &&
+        assignment.payload.teacherUid === payload.teacherUid);
+      if (!teacherAssignment) {
+        fail('failed-precondition', `Penugasan guru untuk ${payload.subject} tidak ditemukan pada semester ini.`);
+      }
       const room = roomsById.get(payload.roomId);
       if (!room || room.get('isActive') !== true) {
         fail('failed-precondition', `Ruangan jadwal ${payload.subject} tidak aktif atau belum dipilih.`);
@@ -1675,6 +1889,7 @@ exports.activateSemester = onCall({ region: REGION }, async (request) => {
         subject: payload.subject,
         teacher: payload.teacherName,
         teacherUid: payload.teacherUid,
+        teacherAssignmentId: teacherAssignment.id,
         day: payload.day,
         start: payload.start,
         end: payload.end,
@@ -1803,6 +2018,11 @@ exports.saveActiveSchedule = onCall({ region: REGION }, async (request) => {
     subject: payload.subject,
     teacher: payload.teacherName,
     teacherUid: teacherSnapshot.id,
+    teacherAssignmentId: existingRows.find((row) =>
+      row.type === 'teacherAssignments' &&
+      row.payload.classId === payload.classId &&
+      row.payload.subjectId === payload.subjectId &&
+      row.payload.teacherUid === payload.teacherUid)?.id || '',
     day: payload.day,
     start: payload.start,
     end: payload.end,
