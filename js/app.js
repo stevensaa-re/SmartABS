@@ -95,7 +95,7 @@ function sidebarHTML(session, activePage) {
 
   return `
     <div class="sidebar-brand">
-      <div class="brand-mark"><i class="fa-solid fa-fingerprint"></i></div>
+      <div class="brand-mark"><img src="assets/smartabs-logo.png" alt="Logo SMARTABS"></div>
       <div class="brand-text">
         <strong>SMARTABS</strong>
         <span>Smart Attendance System</span>

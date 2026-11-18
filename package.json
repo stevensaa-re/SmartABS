@@ -21,6 +21,7 @@
       "admin/**/*",
       "guru/**/*",
       "siswa/**/*",
+      "assets/**/*",
       "css/**/*",
       "js/**/*",
       "login.html",
